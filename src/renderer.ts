@@ -1,4 +1,5 @@
-import { paginate, themes, wrapText, stickerPosition, type Diary, type TextLine, type Theme } from './model';
+import { measureInline,graphemes } from './inline-content';
+import { paginate, themes, wrapText, stickerPosition, type Diary, type TextLine, type Theme, type ThemeId } from './model';
 import { drawSticker, getMoodSticker } from './catalog';
 import type { LoadedMedia } from './media';
 import { notebookAsset } from './book-assets';
@@ -12,7 +13,37 @@ const hand='"KaiTi", "STKaiti", "Kaiti SC", "FangSong", serif';
 const sans='"PingFang SC", "Microsoft YaHei", sans-serif';
 export const dimensions=(d:Diary)=>d.ratio==='portrait'?[900,1600]:[1600,900];
 interface Geometry { title:MediaRect; body:MediaRect&{size:number;step:number;lines:number}; note:MediaRect; mood:MediaRect; media:MediaRect }
-function geometry(d:Diary):Geometry {
+// Paper bounds measured on the original material plates at the 1600 × 900 canvas.
+// These exclude bindings, layered deckle edges and outer collage decorations.
+const rightPaper:Record<ThemeId,MediaRect>={
+  sketch:{x:810,y:60,w:685,h:760},cream:{x:810,y:80,w:670,h:700},
+  travel:{x:815,y:80,w:540,h:730},blue:{x:805,y:65,w:620,h:755},
+  forest:{x:855,y:100,w:595,h:680},film:{x:805,y:95,w:655,h:685},
+  chat:{x:835,y:90,w:615,h:710},pocket:{x:840,y:110,w:670,h:670},
+};
+export function paperBounds(d:Diary):MediaRect{
+  if(d.ratio==='landscape')return {...rightPaper[d.theme]};
+  const margins:Record<ThemeId,[number,number]>={sketch:[150,850],cream:[165,860],travel:[260,850],blue:[220,850],forest:[270,835],film:[205,850],chat:[180,835],pocket:[115,850]};
+  const [left,right]=margins[d.theme];return {x:left,y:90,w:right-left,h:1390};
+}
+function geometry(d:Diary):Geometry{
+  const g=baseGeometry(d),paper=paperBounds(d);
+  if(d.ratio==='portrait'){
+    const x=paper.x+20,w=paper.w-40;
+    for(const field of ['title','body','note','mood','media'] as const)Object.assign(g[field],{x,w});
+    return g;
+  }
+  const frame=d.theme==='cream'?17:d.theme==='film'?23:10;
+  const top=d.theme==='film'?25:21,bottom=d.theme==='cream'?42:d.theme==='film'?25:10;
+  g.media.w=Math.min(g.media.w,paper.w-120-2*frame);
+  g.media.x=paper.x+(paper.w-g.media.w)/2;
+  // Center the complete photo + mood group vertically, including the white frame.
+  const gap=24,groupHeight=top+g.media.h+bottom+gap+g.mood.h;
+  g.media.y=paper.y+(paper.h-groupHeight)/2+top;
+  g.mood={x:g.media.x,y:g.media.y+g.media.h+bottom+gap,w:g.media.w,h:g.mood.h};
+  return g;
+}
+function baseGeometry(d:Diary):Geometry {
   if(d.ratio==='portrait') {
     const media={x:146,y:270,w:634,h:420};
     if(d.theme==='film')Object.assign(media,{x:95,y:290,w:710,h:360});
@@ -56,7 +87,7 @@ export function mediaForSlot(d:Diary,page:number,slot:number,media:LoadedMedia[]
 export const activeMedia=(d:Diary,page:number,media:LoadedMedia[])=>mediaForSlot(d,page,0,media);
 export function pagesFor(d:Diary,minimumPages=1):TextLine[][]{
   const ctx=document.createElement('canvas').getContext('2d')!,g=geometry(d);ctx.font=`${g.body.size}px ${hand}`;
-  const pages=paginate(d.body,g.body.w,g.body.lines,s=>ctx.measureText(s).width);
+  const pages=paginate(d.body,g.body.w,g.body.lines,s=>measureInline(s,d.inlineStickers,g.body.size,t=>ctx.measureText(t).width));
   if(pages.length>=minimumPages)return pages;
   const all=pages.flat(),perPage=Math.max(1,Math.ceil(all.length/minimumPages));
   return Array.from({length:minimumPages},(_,i)=>all.slice(i*perPage,(i+1)*perPage));
@@ -211,22 +242,32 @@ function photo(c:Ctx,m:LoadedMedia|undefined,r:MediaRect,d:Diary,t:Theme,index:n
   else {box(c,x,y,w,h,'#f1eee5');const cx=x+w/2,cy=y+h/2,size=Math.min(w,h)*.1;line(c,cx-size,cy,cx+size,cy,'#bbb7a5',1.7);line(c,cx,cy-size,cx,cy+size,'#bbb7a5',1.7);c.textAlign='center';txt(c,'留给今天的回忆',cx,cy+size+Math.min(30,h*.16),Math.min(21,w/11),'#9d9b89');c.textAlign='left';}
   c.restore();if(d.decoration>0&&index<2)washi(c,x+Math.min(26,w*.1),y-21,Math.min(126,w*.49),30,d.theme==='blue'?'#9db7ca':d.theme==='cream'?'#d5bc9c':t.accent,-.08,index%2?'dot':'gingham');
 }
-function writing(c:Ctx,d:Diary,t:Theme,g:Geometry,content:TextLine[],time:number,animate:boolean,editingField?:EditingField){
-  if(editingField!=='title'){c.font=`${d.ratio==='portrait'?43:37}px ${hand}`;wrapText(d.title||'今天的日记',g.title.w,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.title.x,g.title.y+40+i*43,d.ratio==='portrait'?43:37,t.ink));}
+function richText(c:Ctx,d:Diary,media:LoadedMedia[],text:string,x:number,y:number,size:number,color:string){
+  c.font=`${size}px ${hand}`;c.fillStyle=color;
+  for(const char of graphemes(text)){
+    const kind=d.inlineStickers?.[char];
+    if(kind){if(kind.startsWith('asset:')){const m=media.find(m=>m.asset.id===kind.slice(6)),e=m?.element;if(e instanceof HTMLImageElement){const scale=size/Math.max(e.naturalWidth,e.naturalHeight);c.drawImage(e,x+(size-e.naturalWidth*scale)/2,y-size*.83,e.naturalWidth*scale,e.naturalHeight*scale);}}else drawSticker(c,kind,x+size/2,y-size*.33,size);x+=size;}
+    else{c.fillText(char,x,y);x+=c.measureText(char).width;}
+  }
+}
+function writing(c:Ctx,d:Diary,t:Theme,g:Geometry,media:LoadedMedia[],content:TextLine[],time:number,animate:boolean,editingField?:EditingField){
+  const rich=(s:string,x:number,y:number,size:number,color:string)=>richText(c,d,media,s,x,y,size,color);
+  const measure=(text:string,size:number)=>measureInline(text,d.inlineStickers,size,s=>c.measureText(s).width);
+  if(editingField!=='title'){c.font=`${d.ratio==='portrait'?43:37}px ${hand}`;wrapText(d.title||'今天的日记',g.title.w,s=>measure(s,d.ratio==='portrait'?43:37)).slice(0,2).forEach((s,i)=>rich(s,g.title.x,g.title.y+40+i*43,d.ratio==='portrait'?43:37,t.ink));}
   const lines=content.length?content:[{text:'给今天，留一点值得收藏的回忆。',paragraph:0,first:true}];c.font=`${g.body.size}px ${hand}`;
-  const largest=Math.max(1,...lines.map(l=>c.measureText(l.text).width));
+  const largest=Math.max(1,...lines.map(l=>measure(l.text,g.body.size)));
   const short=lines.length<=4&&d.theme!=='chat';
   const bodySize=short?Math.min(d.ratio==='portrait'?46:44,g.body.size*1.42,g.body.size*g.body.w/largest):g.body.size;
   const step=short?Math.min(g.body.step*1.5,g.body.h/lines.length):g.body.step;
   const offset=short?Math.max(0,(g.body.h-(lines.length-1)*step-bodySize)/2):0;
-  if(editingField!=='body')lines.forEach((l,i)=>{c.save();c.globalAlpha=animate?Math.max(0,Math.min(1,(time-i*.25)*3)):1;txt(c,l.text,g.body.x,g.body.y+offset+bodySize+i*step,bodySize,t.ink);c.restore();});
-  if(editingField!=='note'){txt(c,d.theme==='travel'?'路上的小记':d.theme==='film'?'观后感 / 小批注':'我的小批注',g.note.x,g.note.y+11,20,t.accent);c.font=`${d.ratio==='portrait'?26:23}px ${hand}`;wrapText(d.note||'把平凡的一天，认真收好。',g.note.w-5,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.note.x,g.note.y+47+i*31,d.ratio==='portrait'?26:23,t.ink));}
-  if(editingField!=='mood'){const mx=g.mood.x,my=g.mood.y;if(g.mood.w>250){drawSticker(c,getMoodSticker(d.mood),mx+25,my+22,64);txt(c,`今日心情  ${d.mood}`,mx+67,my+31,26,t.ink);}else{txt(c,'今日心情',mx,my+6,20,t.accent);drawSticker(c,getMoodSticker(d.mood),mx+28,my+52,61);txt(c,d.mood.slice(0,7),mx+65,my+57,19,t.ink);}}
+  if(editingField!=='body')lines.forEach((l,i)=>{c.save();c.globalAlpha=animate?Math.max(0,Math.min(1,(time-i*.25)*3)):1;rich(l.text,g.body.x,g.body.y+offset+bodySize+i*step,bodySize,t.ink);c.restore();});
+  if(editingField!=='note'){txt(c,d.theme==='travel'?'路上的小记':d.theme==='film'?'观后感 / 小批注':'我的小批注',g.note.x,g.note.y+11,20,t.accent);c.font=`${d.ratio==='portrait'?26:23}px ${hand}`;wrapText(d.note||'把平凡的一天，认真收好。',g.note.w-5,s=>measure(s,d.ratio==='portrait'?26:23)).slice(0,2).forEach((s,i)=>rich(s,g.note.x,g.note.y+47+i*31,d.ratio==='portrait'?26:23,t.ink));}
+  if(editingField!=='mood'){const mx=g.mood.x,my=g.mood.y;if(g.mood.w>250){const label=`今日心情  ${d.mood}`,fontSize=26;c.font=`${fontSize}px ${hand}`;const labels=wrapText(label,g.mood.w-76,s=>c.measureText(s).width).slice(0,2),width=Math.max(...labels.map(s=>c.measureText(s).width)),left=mx+(g.mood.w-width-76)/2;drawSticker(c,getMoodSticker(d.mood),left+30,my+30,60);labels.forEach((s,i)=>txt(c,s,left+70,my+(labels.length===1?36:21)+i*30,fontSize,t.ink));}else{txt(c,'今日心情',mx,my+6,20,t.accent);drawSticker(c,getMoodSticker(d.mood),mx+28,my+52,61);txt(c,d.mood.slice(0,7),mx+65,my+57,19,t.ink);}}
 }
 function userStickers(c:Ctx,d:Diary,page:number,media:LoadedMedia[],W:number,H:number){
-  for(const s of d.stickers??[]){if(s.page!==page)continue;const pos=stickerPosition(s,d.ratio),x=pos.x*W,y=pos.y*H;if(s.kind.startsWith('asset:')){const image=media.find(m=>m.asset.id===s.kind.slice(6));if(image&&image.element instanceof HTMLImageElement){const e=image.element,scale=s.size/Math.max(e.naturalWidth,e.naturalHeight);c.save();c.translate(x,y);c.rotate(s.rotation);c.drawImage(e,-e.naturalWidth*scale/2,-e.naturalHeight*scale/2,e.naturalWidth*scale,e.naturalHeight*scale);c.restore();}}else drawSticker(c,s.kind,x,y,s.size,s.rotation);}
+  for(const s of d.stickers??[]){if(s.page!==page)continue;const pos=stickerPosition(s,d.ratio),x=pos.x*W,y=pos.y*H;if(s.kind.startsWith('asset:')){const image=media.find(m=>m.asset.id===s.kind.slice(6));if(image&&image.element instanceof HTMLImageElement){const e=image.element,scale=s.size/Math.max(e.naturalWidth,e.naturalHeight);c.save();c.translate(x,y);c.rotate(s.rotation);c.drawImage(e,-e.naturalWidth*scale/2,-e.naturalHeight*scale/2,e.naturalWidth*scale,e.naturalHeight*scale);c.restore();}}else if(s.kind.startsWith('emoji:')){c.save();c.translate(x,y);c.rotate(s.rotation);c.textAlign='center';c.textBaseline='middle';txt(c,s.kind.slice(6),0,0,s.size*.8,'#333','"Apple Color Emoji","Segoe UI Emoji",sans-serif');c.restore();}else drawSticker(c,s.kind,x,y,s.size,s.rotation);}
 }
 export function render(canvas:HTMLCanvasElement,d:Diary,pages:TextLine[][],page:number,media:LoadedMedia[],time=999,animate=false,editingField?:EditingField){
-  const c=canvas.getContext('2d')!,[W,H]=dimensions(d),t=themes.find(t=>t.id===d.theme)??themes[0],g=geometry(d);c.save();c.scale(canvas.width/W,canvas.height/H);c.clearRect(0,0,W,H);book(c,d,t);decorations(c,d,t,g);mediaRects(d).forEach((r,i)=>photo(c,mediaForSlot(d,page,i,media),r,d,t,i));writing(c,d,t,g,pages[page]??[],time,animate,editingField);
+  const c=canvas.getContext('2d')!,[W,H]=dimensions(d),t=themes.find(t=>t.id===d.theme)??themes[0],g=geometry(d);c.save();c.scale(canvas.width/W,canvas.height/H);c.clearRect(0,0,W,H);book(c,d,t);decorations(c,d,t,g);mediaRects(d).forEach((r,i)=>photo(c,mediaForSlot(d,page,i,media),r,d,t,i));writing(c,d,t,g,media,pages[page]??[],time,animate,editingField);
   userStickers(c,d,page,media,W,H);c.textAlign='center';txt(c,`${String(page+1).padStart(2,'0')} / ${String(pages.length).padStart(2,'0')}`,W/2,H-58,16,t.accent,sans);c.textAlign='left';c.restore();
 }

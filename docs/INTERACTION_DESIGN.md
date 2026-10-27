@@ -22,3 +22,15 @@
 - 模板、加载和错误状态沿用应用的轻纸色和绿色工具体系；手机保留可见“模板”文字，其余常用工具使用带可访问名称的图标。
 
 离线恢复、真机安装与所有手机编码器兼容仍按实测记录的限制说明，不因本轮界面改动宣称已解决。
+
+## v0.5：行内贴纸与纸页校准
+
+参考 [Goodnotes 元素工具](https://support.goodnotes.com/hc/en-us/articles/360003097995-Elements-Tool-Enrich-and-reuse-your-notes)和[选中、移动与编辑](https://support.goodnotes.com/hc/en-us/articles/7353695644175-Select-Move-and-Edit-Content-With-the-Lasso-Tool)，选中后提供就近操作条；也参考 [Notion 的媒体操作](https://www.notion.com/help/images-files-and-media)组织移动与删除。本项目保留直接点选的方式。
+
+- 贴纸键盘选择“插入文字中 / 贴在书页上”；正在写字时默认插入文字。自定义 PNG、JPEG、WebP 图片同样支持。
+- 书页文本框使用受控富文本输入，贴纸为不可拆开的行内元素。Emoji 组合按 grapheme 处理；粘贴 HTML 仅取纯文本，不保存外部 HTML。
+- 选中行内贴纸或表情，可删除、前后移动、移到新光标处或桌面拖放。书页贴纸在阅读状态也可点选、拖动，旁边提供缩放、删除与完成。
+- 行内图片用私用字符与素材映射存储，文字源范围保持可定位；映射随 IndexedDB 和 ZIP 保存，并进入 Canvas 的换行、分页及导出。每篇最多使用 1000 种行内贴纸，旧备份仍可导入。
+- 八款底图分别记录右纸页可用范围，照片组包含画框、胶带、心情区整体计算中轴和垂直留白。旅行地图边、金属环、毛边和外侧装饰不计入可用纸面；手机单页使用裁切后的纸面边界。
+
+截图：[行内编辑](inline-stickers.png)、[手机行内编辑](mobile-inline-stickers.png)、[校准后的布局](layout-corrected.png)。

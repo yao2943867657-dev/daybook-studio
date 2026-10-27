@@ -2,6 +2,8 @@ import './style.css';
 import './notebook.css';
 import './inline-editor.css';
 import './workspace-ui.css';
+import { RichEditor } from './rich-editor';
+import { inlineToken } from './inline-content';
 import { bodyPageRange, replaceBodyRange } from './text-editing';
 import { themes, initialDiary, localDate, sortEntries, calendarCells, slotCount, stickerPosition, type StickerPlacement, type Entry, type Diary, type Asset, type TextLine } from './model';
 import { prepare, release, seek, sampleAssets, type LoadedMedia } from './media';
@@ -26,6 +28,7 @@ let selectedSticker='',uploadTarget:{page:number;slot:number}|undefined,customSt
 let initialized=false,unsaved=false,saveQueue:Promise<void>=Promise.resolve();
 type WritingField='title'|'body'|'note';
 let inlineEdit:{field:WritingField;start:number;end:number;prefix:string;suffix:string;value:string}|undefined;
+let insertTarget:'text'|'page'='page';
 let keyboardOpen=false,keyboardTab:'stickers'|'emoji'|'mood'='stickers',keyboardQuery='',keyboardCategory='推荐';
 let commandRange:{start:number;end:number}|undefined;
 let recentStickers:string[]=[];
@@ -58,8 +61,8 @@ app.innerHTML=`
 </section><p class="local-note">${icon('leaf')}素材与日记保存在当前浏览器。<br>记得备份工程，就能换设备继续写。</p></aside>
 <section class="studio" aria-label="日记预览与模板">
 <div class="stage-toolbar"><button class="reader-date" id="reader-date">${icon('calendar')}<span></span></button><div class="segmented" aria-label="阅读方式"><button data-ratio="landscape">展开双页</button><button data-ratio="portrait">单页阅读</button></div></div>
-<div class="canvas-stage"><div class="stage-stamp" id="reading-hint">点文字就能写，贴一点今天的心情。</div><div class="book-viewport"><canvas id="preview" width="1600" height="900" role="img" aria-label="日记完整书页"></canvas><div id="page-hotspots"></div><div id="sticker-selection" hidden></div><div id="page-editor-shell" hidden><textarea id="page-editor" aria-label="在书页上编辑正文" spellcheck="false"></textarea></div></div><div class="stage-bottom"><span id="theme-caption"></span><span id="page-description">完整书页，慢慢读。</span></div></div>
-<div class="page-writing-tools" aria-label="书页编辑工具"><span id="inline-status">直接在书页上写</span><div><button id="emoji-toggle" class="quiet" aria-label="输入表情">☺ <span>表情</span></button><button id="stickers-toggle" class="quiet" aria-label="打开贴纸键盘">✿ <span>贴纸</span></button><button id="page-paste-sticker" class="quiet" aria-label="上传图片贴纸">${icon('image')} <span>图片贴纸</span></button><button id="inline-done" class="quiet" hidden>写好了 ✓</button></div></div>
+<div class="canvas-stage"><div class="stage-stamp" id="reading-hint">点文字就能写，贴一点今天的心情。</div><div class="book-viewport"><canvas id="preview" width="1600" height="900" role="img" aria-label="日记完整书页"></canvas><div id="page-hotspots"></div><div id="sticker-selection" hidden></div><div id="object-actions" class="object-actions" hidden aria-label="贴纸操作"><span>拖动移动</span><button id="object-smaller" aria-label="缩小贴纸">−</button><button id="object-larger" aria-label="放大贴纸">＋</button><button id="object-delete">删除</button><button id="object-done">完成</button></div><div id="page-editor-shell" hidden><div id="page-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="在书页上编辑正文" spellcheck="false"></div></div></div><div class="stage-bottom"><span id="theme-caption"></span><span id="page-description">完整书页，慢慢读。</span></div></div>
+<div id="inline-actions" class="inline-actions" hidden aria-label="行内表情操作"><span id="inline-action-hint">拖动或选择移动方式</span><button id="inline-left">← 前移</button><button id="inline-right">后移 →</button><button id="inline-move">移到光标</button><button id="inline-remove">删除</button></div><div class="page-writing-tools" aria-label="书页编辑工具"><span id="inline-status">直接在书页上写</span><div><button id="emoji-toggle" class="quiet" aria-label="输入表情">☺ <span>表情</span></button><button id="stickers-toggle" class="quiet" aria-label="打开贴纸键盘">✿ <span>贴纸</span></button><button id="page-paste-sticker" class="quiet" aria-label="上传图片贴纸">${icon('image')} <span>图片贴纸</span></button><button id="inline-done" class="quiet" hidden>写好了 ✓</button></div></div>
 <div class="playback"><button class="quiet" id="play">${icon('play')} 动画预览</button><div class="pagination"><button class="icon-button previous" id="prev" aria-label="前一页日记">${icon('chevron')}</button><span id="page-label">1 / 1</span><button class="icon-button" id="next" aria-label="后一页日记">${icon('chevron')}</button></div><label class="page-media editing-only">本页素材 <select id="page-media" aria-label="本页第一张素材"></select></label><span class="reading-only" id="entry-position"></span></div>
 <div class="edit-tools">
 <div class="template-heading"><div><h2>选一本喜欢的本子</h2><p>换一种纸张，也换一种记住今天的方式。</p></div><span>8 种心情，随时换</span></div>
@@ -72,7 +75,7 @@ app.innerHTML=`
 <input id="project-input" type="file" accept=".zip" hidden>
 <input id="sticker-input" type="file" accept="image/png,image/webp,image/jpeg" hidden>
 <dialog id="calendar-dialog"><div class="dialog-heading"><div><h2>日子，一页页收好</h2><p id="entry-count"></p></div><button class="icon-button" data-close="calendar-dialog" aria-label="关闭日历">×</button></div><div class="calendar-nav"><button id="month-prev" class="icon-button" aria-label="上个月">‹</button><strong id="calendar-month"></strong><button id="month-next" class="icon-button" aria-label="下个月">›</button></div><div class="calendar-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div class="calendar-grid" id="calendar-grid"></div><div class="calendar-jump"><label>跳到某天<input type="date" id="calendar-date"></label><button class="quiet" id="calendar-today">今天</button></div><div id="entry-list"></div><div class="calendar-actions"><button class="quiet" id="calendar-write">写下这一天</button><button class="quiet" id="backup">备份这篇</button><button class="quiet" id="backup-notebook">备份整本</button><button class="quiet" id="import-project">导入日记</button><button class="text-button" id="install">安装到桌面</button></div></dialog>
-<section class="sticker-keyboard" id="sticker-keyboard" role="region" aria-label="表情与贴纸键盘" hidden><div class="keyboard-heading"><div class="keyboard-tabs"><button data-keyboard-tab="stickers">贴到书页</button><button data-keyboard-tab="emoji">输入表情</button><button data-keyboard-tab="mood">今日心情</button></div><button id="keyboard-close" class="icon-button" aria-label="收起贴纸键盘">×</button></div><div class="keyboard-search"><input type="search" id="keyboard-search" aria-label="搜索表情与贴纸" placeholder="搜猫猫、抱抱、开心、花…"><button class="quiet" id="keyboard-upload" aria-label="添加自己的图片贴纸">＋ 图片</button></div><div id="keyboard-categories" class="keyboard-categories"></div><div id="keyboard-grid" class="keyboard-grid"></div><div class="keyboard-selected" id="keyboard-selected" hidden><label>大小<input id="quick-sticker-size" type="range" min="24" max="150"></label><label>旋转<input id="quick-sticker-rotation" type="range" min="-30" max="30"></label><button id="quick-sticker-remove" class="quiet">移除</button><button id="quick-sticker-done" class="quiet">摆好了</button></div><p id="keyboard-hint">点一下贴到书页，拖动到喜欢的位置。可直接粘贴图片。</p></section>
+<section class="sticker-keyboard" id="sticker-keyboard" role="region" aria-label="表情与贴纸键盘" hidden><div class="keyboard-heading"><div class="keyboard-tabs"><button data-keyboard-tab="stickers">贴纸</button><button data-keyboard-tab="emoji">输入表情</button><button data-keyboard-tab="mood">今日心情</button></div><button id="keyboard-close" class="icon-button" aria-label="收起贴纸键盘">×</button></div><div class="insert-target" id="insert-target"><button data-insert-target="text">插入文字中</button><button data-insert-target="page">贴在书页上</button></div><div class="keyboard-search"><input type="search" id="keyboard-search" aria-label="搜索表情与贴纸" placeholder="搜猫猫、抱抱、开心、花…"><button class="quiet" id="keyboard-upload" aria-label="添加自己的图片贴纸">＋ 图片</button></div><div id="keyboard-categories" class="keyboard-categories"></div><div id="keyboard-grid" class="keyboard-grid"></div><div class="keyboard-selected" id="keyboard-selected" hidden><label>大小<input id="quick-sticker-size" type="range" min="24" max="150"></label><label>旋转<input id="quick-sticker-rotation" type="range" min="-30" max="30"></label><button id="quick-sticker-remove" class="quiet">移除</button><button id="quick-sticker-done" class="quiet">摆好了</button></div><p id="keyboard-hint">点一下贴到书页，拖动到喜欢的位置。可直接粘贴图片。</p></section>
 <dialog id="export-dialog"><form method="dialog"><div class="dialog-heading"><div><h2>把今天带走</h2><p>保存日记，发到小红书或朋友圈。</p></div><button class="icon-button" aria-label="关闭">×</button></div></form><div class="export-choices"><button class="export-card" id="export-png">${icon('image')}<strong>日记图片</strong><span>保存当前页 · PNG</span></button><button class="export-card" id="export-video">${icon('play')}<strong>日记视频</strong><span>这篇的全部页 · 24 帧/秒</span></button></div><div class="export-settings"><label class="field">分享画幅<select id="export-ratio"><option value="portrait">9:16 竖屏 · 小红书 / 朋友圈</option><option value="landscape">16:9 横屏 · 展开双页</option></select></label><label class="field">视频格式<select id="format"><option value="mp4">MP4（优先）</option><option value="webm">WebM（备选）</option></select></label><label class="field">清晰度<select id="size"><option value="720">720p · 更轻巧</option><option value="1080">1080p · 更清晰</option></select></label></div><p class="field-hint">保存视频后，在小红书或微信相册发布。视频最长 3 分钟，导出期间请保持页面在前台。多视频页面以第一个视频的原声为主。</p><div id="export-progress" hidden><progress max="1" value="0"></progress><p role="status" id="progress-text"></p><button class="quiet" id="cancel-export">取消导出</button></div><p id="export-error" role="alert"></p><div id="export-result" hidden><video controls playsinline aria-label="导出成片预览"></video><a class="primary" download>保存视频</a><button class="quiet" id="share-video">分享视频</button><small>系统分享不可用时，请先保存到相册，再到小红书或朋友圈发布。</small></div></dialog>
 <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><div class="dialog-actions"><button id="message-cancel" class="quiet">取消</button><button id="message-ok" class="primary">知道了</button></div></dialog>
 <div id="toast" role="status" class="toast" hidden></div>
@@ -151,7 +154,7 @@ async function addFiles(files:File[]){
       const a:Asset={id:crypto.randomUUID(),name:file.name,type:file.type.startsWith('video')?'video':'image',blob:file,...(customStickerUpload?{role:'sticker' as const}:{})};
       try{
         const m=await prepare(a);
-        if(customStickerUpload){assets.push(a);media.push(m);addSticker(`asset:${a.id}`);}
+        if(customStickerUpload){assets.push(a);media.push(m);if(inlineEdit&&insertTarget==='text')insertInline(`asset:${a.id}`);else addSticker(`asset:${a.id}`);}
         else if(uploadTarget){
           const prior=mediaForSlot(diary,uploadTarget.page,uploadTarget.slot,media);
           const resolved=Object.fromEntries(Array.from({length:pages.length},(_,p)=>[String(p),Array.from({length:slotCount(diary.layout)},(_,s)=>mediaForSlot(diary,p,s,media)?.asset.id??'__empty__')]));
@@ -323,36 +326,50 @@ $('#calendar-today').onclick=()=>{calendarDate=localDate();calendarYear=Number(c
 $('#calendar-write').onclick=async()=>{if(busy)return;$<HTMLDialogElement>('#calendar-dialog').close();await createEntry(calendarDate);};
 
 const fieldNames={title:'日记标题',body:'今天的日记',note:'我的小批注',mood:'今日心情'};
+const pageEditor=new RichEditor($('#page-editor'),token=>{
+  const kind=diary.inlineStickers?.[token];if(!kind)return;
+  if(kind.startsWith('asset:')){const m=media.find(m=>m.asset.id===kind.slice(6));return m?{url:m.url,name:m.asset.name}:undefined;}
+  const item=getSticker(kind);return item?{url:`data:image/svg+xml;charset=utf-8,${encodeURIComponent(item.svg)}`,name:item.name}:undefined;
+},()=>applyInlineValue());
+pageEditor.onselect=()=>{pageEditor.highlight();const selected=!!pageEditor.selected&&!!inlineEdit;$('#inline-actions').hidden=!selected;$('#inline-action-hint').textContent=pageEditor.moving?'点击文字中的新位置':'拖动或选择移动方式';};
+$('#inline-actions').onpointerdown=e=>e.preventDefault();
+$('#inline-left').onclick=()=>pageEditor.step(-1);$('#inline-right').onclick=()=>pageEditor.step(1);
+$('#inline-remove').onclick=()=>pageEditor.remove();$('#inline-move').onclick=()=>{pageEditor.moving=true;pageEditor.onselect();};
+function insertInline(kind:string){
+  if(!inlineEdit)beginInlineEdit('body');
+  try{diary.inlineStickers??={};const token=inlineToken(diary.inlineStickers,kind,diary.title+diary.body+diary.note);
+  pageEditor.setRangeText(token,pageEditor.selectionStart,pageEditor.selectionEnd);applyInlineValue();}catch(error){toast((error as Error).message);}
+}
 function positionPageEditor(){
   if(!inlineEdit)return;const d=displayDiary(),r=editRegions(d).find(r=>r.kind===inlineEdit!.field)!;
   document.querySelectorAll<HTMLButtonElement>('[data-field]').forEach(b=>b.classList.toggle('active-field',b.dataset.field===inlineEdit?.field));
   const [W,H]=dimensions(d),bounds=canvas.getBoundingClientRect(),scale=bounds.width/W;
   $('#page-editor-shell').style.cssText=hotspotStyle(r,W,H);
-  const input=$<HTMLTextAreaElement>('#page-editor');
+  const input=pageEditor;
   const base=inlineEdit.field==='title'?(d.ratio==='portrait'?43:37):inlineEdit.field==='note'?(d.ratio==='portrait'?26:23):writingStyle(d).bodyFontSize;
   input.style.fontFamily=writingStyle(d).fontFamily;input.style.fontSize=`${Math.max(smallScreen.matches?16:12,base*scale)}px`;
   input.style.lineHeight=String(inlineEdit.field==='body'?writingStyle(d).bodyLineHeight/writingStyle(d).bodyFontSize:1.5);input.style.color=writingStyle(d).ink;
   input.style.paddingTop=inlineEdit.field==='note'?`${27*scale}px`:'0px';
 }
-function finishInlineEdit(rebuild=true){if(!inlineEdit)return;inlineEdit=undefined;commandRange=undefined;$('#page-editor-shell').hidden=true;$('.book-viewport').classList.remove('is-writing');$('#inline-done').hidden=true;$('#inline-status').textContent='直接在书页上写';fill();refresh(false,rebuild);void persist().catch(error=>toast(`保存失败：${(error as Error).message}。请备份日记。`));}
+function finishInlineEdit(rebuild=true){if(!inlineEdit)return;inlineEdit=undefined;pageEditor.selected=undefined;pageEditor.onselect();commandRange=undefined;$('#page-editor-shell').hidden=true;$('.book-viewport').classList.remove('is-writing');$('#inline-done').hidden=true;$('#inline-status').textContent='直接在书页上写';fill();refresh(false,rebuild);void persist().catch(error=>toast(`保存失败：${(error as Error).message}。请备份日记。`));}
 function beginInlineEdit(field:WritingField|'mood'){
   if(busy)return;if(field==='mood'){finishInlineEdit();openKeyboard('mood');return;}
   if(inlineEdit?.field===field){$('#page-editor').focus();return;}
-  finishInlineEdit();stop();const range=field==='body'?bodyPageRange(diary.body,pages,page):{start:0,end:diary[field].length,text:diary[field]};
+  finishInlineEdit();insertTarget='text';stop();const range=field==='body'?bodyPageRange(diary.body,pages,page):{start:0,end:diary[field].length,text:diary[field]};
   inlineEdit={field,start:range.start,end:range.end,prefix:field==='body'?diary.body.slice(0,range.start):'',suffix:field==='body'?diary.body.slice(range.end):'',value:range.text};
-  const input=$<HTMLTextAreaElement>('#page-editor');input.value=range.text;input.maxLength=field==='title'?60:field==='note'?120:10000-inlineEdit.prefix.length-inlineEdit.suffix.length;
+  const input=pageEditor;input.value=range.text;input.maxLength=field==='title'?60:field==='note'?120:10000-inlineEdit.prefix.length-inlineEdit.suffix.length;
   input.setAttribute('aria-label',`在书页上编辑${fieldNames[field]}`);input.placeholder=field==='body'?'今天有什么值得记住的小事？':'写在这里…';
   $('#page-editor-shell').hidden=false;$('.book-viewport').classList.add('is-writing');$('#inline-done').hidden=false;$('#inline-status').textContent=field==='body'?`正在写第 ${page+1} 页 · 自动保存`:'直接修改 · 自动保存';
   paint();input.focus({preventScroll:true});input.setSelectionRange(field==='body'?0:input.value.length,field==='body'?0:input.value.length);
 }
 function applyInlineValue(){
-  if(!inlineEdit)return;const input=$<HTMLTextAreaElement>('#page-editor'),s=inlineEdit;
+  if(!inlineEdit)return;const input=pageEditor,s=inlineEdit;
   try{if(s.field==='body')diary.body=replaceBodyRange(s.prefix+s.value+s.suffix,s.prefix.length,s.prefix.length+s.value.length,input.value);else{if(input.value.length>input.maxLength)throw new Error(`这段文字最多 ${input.maxLength} 字`);diary[s.field]=input.value;}s.value=input.value;}
   catch(error){input.value=s.value;toast((error as Error).message);return;}
   $<HTMLInputElement|HTMLTextAreaElement>(`#${s.field}`).value=diary[s.field];$('#word-count').textContent=`${diary.body.length} 字`;queueSave();
 }
 $('#page-editor').oninput=e=>{
-  applyInlineValue();if((e as InputEvent).isComposing)return;const input=$<HTMLTextAreaElement>('#page-editor');
+  applyInlineValue();if((e as InputEvent).isComposing)return;const input=pageEditor;
   const before=input.value.slice(0,input.selectionStart),match=/(?:^|\s)(\/(?:贴纸|sticker)(?: +([^\n/]{0,20}))?)$/u.exec(before);
   if(match){commandRange={start:before.length-match[1].length,end:before.length};openKeyboard('stickers',match[2]??'',false);}else commandRange=undefined;
 };
@@ -362,10 +379,12 @@ $('#inline-done').onclick=()=>finishInlineEdit();
 new ResizeObserver(()=>positionPageEditor()).observe(canvas);
 document.addEventListener('pointerdown',e=>{
   if(!inlineEdit||!(e.target instanceof Element))return;
-  if(e.target.closest('#page-editor-shell,.page-writing-tools,.sticker-keyboard,[data-field]'))return;
+  if(e.target.closest('#page-editor-shell,.page-writing-tools,.inline-actions,.object-actions,.sticker-keyboard,[data-field]'))return;
   // Keep the clicked node alive until its click handler has run (video/upload/toolbar).
   finishInlineEdit(false);
 },true);
+
+document.addEventListener('pointerdown',e=>{if(selectedSticker&&e.target instanceof Element&&!e.target.closest('[data-placed-sticker],.object-actions,.sticker-keyboard,#sticker-tools')){selectedSticker='';document.querySelectorAll('.placed-sticker.selected').forEach(b=>b.classList.remove('selected'));updateStickerSelection();}},true);
 
 const emojiGroups:Record<string,string[]>={
   '心情':['🥰','🥹','😆','😊','😍','😘','🤗','🥺','😭','😤','😴','🫠','🫶','💪','✌️','🙌','🧡','💛','💚','💙','💜','🩷','🤍','💖','✨','💫','⭐','🌈'],
@@ -373,11 +392,12 @@ const emojiGroups:Record<string,string[]>={
   '生活':['🌷','🌸','🌼','🌻','🍀','🌿','🍃','☀️','☁️','🌙','☕','🍵','🥐','🍞','🍓','🍒','🍰','🍮','🍦','📖','✏️','🎨','🎧','📷','🎬','🎀','💌','🕯️'],
 };
 function openKeyboard(tab:typeof keyboardTab='stickers',query='',focus=true){
-  if(busy)return;keyboardTab=tab;keyboardOpen=true;keyboardQuery=query;keyboardCategory='推荐';$('#sticker-keyboard').hidden=false;
+  if(busy)return;insertTarget=inlineEdit?'text':'page';keyboardTab=tab;keyboardOpen=true;keyboardQuery=query;keyboardCategory='推荐';$('#sticker-keyboard').hidden=false;
   $<HTMLInputElement>('#keyboard-search').value=query;renderKeyboard();buildHotspots();if(focus)$<HTMLInputElement>('#keyboard-search').focus({preventScroll:true});
 }
 function closeKeyboard(){keyboardOpen=false;$('#sticker-keyboard').hidden=true;commandRange=undefined;selectedSticker='';updateStickerSelection();buildHotspots();}
 function renderKeyboard(){
+  $('#insert-target').hidden=keyboardTab==='mood';document.querySelectorAll<HTMLButtonElement>('[data-insert-target]').forEach(b=>{b.classList.toggle('active',b.dataset.insertTarget===insertTarget);b.setAttribute('aria-pressed',String(b.dataset.insertTarget===insertTarget));});
   document.querySelectorAll<HTMLButtonElement>('[data-keyboard-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.keyboardTab===keyboardTab);b.setAttribute('aria-pressed',String(b.dataset.keyboardTab===keyboardTab));});
   const categories=keyboardTab==='emoji'?Object.keys(emojiGroups):keyboardTab==='mood'?[]:['推荐','最近',...new Set(catalog.map(s=>s.category)),'我的贴纸'];
   if(!categories.includes(keyboardCategory))keyboardCategory=categories[0]??'';
@@ -393,19 +413,20 @@ function renderKeyboard(){
   }
   if(!grid.innerHTML)grid.innerHTML='<p class="keyboard-empty">这里还没有贴纸，试试搜索或上传自己的图片。</p>';
   $('#keyboard-search').hidden=keyboardTab==='emoji';$('#keyboard-upload').hidden=keyboardTab!=='stickers';
-  $('#keyboard-hint').textContent=keyboardTab==='emoji'?'表情会输入光标所在的位置，和文字一起保存。':keyboardTab==='mood'?'点选一种表情，记住此刻的心情。':'点击贴到书页，再拖动摆放。输入 /贴纸 或按 Ctrl/⌘ + ; 也能打开。';
+  $('#keyboard-hint').textContent=keyboardTab==='mood'?'点选一种表情，记住此刻的心情。':insertTarget==='text'?'插在文字光标处。点选后可删除、前后移动，或移到新的光标位置。':'贴在书页上。点选后可拖动移动、调整大小或删除。';
   updateStickerSelection();
 }
 function consumeStickerCommand(){
-  if(!commandRange||!inlineEdit)return;const input=$<HTMLTextAreaElement>('#page-editor');input.setRangeText('',commandRange.start,commandRange.end,'end');commandRange=undefined;applyInlineValue();
+  if(!commandRange||!inlineEdit)return;const input=pageEditor;input.setRangeText('',commandRange.start,commandRange.end,'end');commandRange=undefined;applyInlineValue();
 }
 $('#keyboard-grid').onpointerdown=e=>{if((e.target as HTMLElement).closest('button'))e.preventDefault();};
 $('#keyboard-grid').onclick=e=>{
   const b=(e.target as HTMLElement).closest<HTMLButtonElement>('button');if(!b||busy)return;
-  if(b.dataset.keyboardSticker){consumeStickerCommand();addSticker(b.dataset.keyboardSticker);recentStickers=[b.dataset.keyboardSticker,...recentStickers.filter(id=>id!==b.dataset.keyboardSticker)].slice(0,16);try{localStorage.setItem('daybook-recent-stickers',JSON.stringify(recentStickers));}catch{}updateStickerSelection();}
-  else if(b.dataset.emoji){if(!inlineEdit)beginInlineEdit('body');const input=$<HTMLTextAreaElement>('#page-editor');input.setRangeText(b.dataset.emoji,input.selectionStart,input.selectionEnd,'end');applyInlineValue();input.focus({preventScroll:true});}
+  if(b.dataset.keyboardSticker){consumeStickerCommand();if(insertTarget==='text')insertInline(b.dataset.keyboardSticker);else addSticker(b.dataset.keyboardSticker);recentStickers=[b.dataset.keyboardSticker,...recentStickers.filter(id=>id!==b.dataset.keyboardSticker)].slice(0,16);try{localStorage.setItem('daybook-recent-stickers',JSON.stringify(recentStickers));}catch{}updateStickerSelection();}
+  else if(b.dataset.emoji){if(insertTarget==='page'){addSticker(`emoji:${b.dataset.emoji}`);return;}if(!inlineEdit)beginInlineEdit('body');const input=pageEditor;input.setRangeText(b.dataset.emoji,input.selectionStart,input.selectionEnd,'end');applyInlineValue();input.focus({preventScroll:true});}
   else if(b.dataset.keyboardMood){diary.mood=b.dataset.keyboardMood;fill();changed();closeKeyboard();}
 };
+document.querySelectorAll<HTMLButtonElement>('[data-insert-target]').forEach(b=>b.onclick=()=>{insertTarget=b.dataset.insertTarget as 'text'|'page';if(insertTarget==='text'&&!inlineEdit)beginInlineEdit('body');renderKeyboard();});
 $('#keyboard-categories').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-keyboard-category]');if(b){keyboardCategory=b.dataset.keyboardCategory!;renderKeyboard();}};
 document.querySelectorAll<HTMLButtonElement>('[data-keyboard-tab]').forEach(b=>b.onclick=()=>{keyboardTab=b.dataset.keyboardTab as typeof keyboardTab;keyboardCategory='推荐';keyboardQuery='';$<HTMLInputElement>('#keyboard-search').value='';renderKeyboard();});
 $('#keyboard-search').oninput=()=>{keyboardQuery=$<HTMLInputElement>('#keyboard-search').value;renderKeyboard();};
@@ -433,7 +454,7 @@ function buildHotspots(){
       const m=mediaForSlot(d,page,slot,media),label=`第 ${slot+1} 个照片或视频位置`;
       return m?.asset.type==='video'?`<div class="inline-video" style="${hotspotStyle(r,W,H)}"><video src="${esc(m.url)}" controls playsinline preload="metadata" aria-label="播放${label}" style="object-fit:${d.fit}"></video><button class="video-start" data-play-slot="${slot}" aria-label="播放第 ${slot+1} 个视频">${icon('play')}<span>点击播放</span></button><button class="replace-media" data-slot="${slot}" aria-label="更换${label}">${icon('image')}<span>更换</span></button></div>`:
         `<button class="media-hotspot ${m?'filled':''}" data-slot="${slot}" style="${hotspotStyle(r,W,H)}" aria-label="${m?'更换':'上传'}${label}"><span>${icon(m?'image':'plus')} ${m?'更换照片 / 视频':'添加照片 / 视频'}</span></button>`;
-    }).join('')+(!reading||keyboardOpen||selectedSticker?diary.stickers.filter(s=>s.page===page).map(s=>`<button class="placed-sticker ${s.id===selectedSticker?'selected':''}" data-placed-sticker="${esc(s.id)}" style="left:${stickerPosition(s,d.ratio).x*100}%;top:${stickerPosition(s,d.ratio).y*100}%;width:${s.size/W*100}%;height:${s.size/H*100}%;transform:translate(-50%,-50%) rotate(${s.rotation}rad)" aria-label="移动贴纸 ${esc(getSticker(s.kind)?.name??'自定义贴纸')}"></button>`).join(''):'');
+    }).join('')+(diary.stickers.filter(s=>s.page===page).map(s=>`<button class="placed-sticker ${s.id===selectedSticker?'selected':''}" data-placed-sticker="${esc(s.id)}" style="left:${stickerPosition(s,d.ratio).x*100}%;top:${stickerPosition(s,d.ratio).y*100}%;width:${s.size/W*100}%;height:${s.size/H*100}%;transform:translate(-50%,-50%) rotate(${s.rotation}rad)" aria-label="移动贴纸 ${esc(getSticker(s.kind)?.name??(s.kind.startsWith('emoji:')?s.kind.slice(6):'自定义贴纸'))}"></button>`).join(''));
   host.querySelectorAll<HTMLButtonElement>('[data-field]').forEach(b=>b.onclick=()=>beginInlineEdit(b.dataset.field as WritingField|'mood'));
   host.querySelectorAll<HTMLButtonElement>('[data-slot]').forEach(b=>b.onclick=()=>{if(busy)return;stop();uploadTarget={page,slot:Number(b.dataset.slot)};customStickerUpload=false;const input=$<HTMLInputElement>('#media-input');input.multiple=false;input.click();});
   host.querySelectorAll<HTMLButtonElement>('[data-play-slot]').forEach(b=>b.onclick=async()=>{
@@ -469,11 +490,13 @@ function addSticker(kind:string){
 }
 function updateStickerSelection(){
   const s=diary.stickers.find(s=>s.id===selectedSticker&&s.page===page),ring=$('#sticker-selection');
-  ring.hidden=!s;$('#sticker-tools').hidden=!s||reading;$('#keyboard-selected').hidden=!s;if(!s)return;
-  const [W,H]=dimensions(displayDiary()),pos=stickerPosition(s,displayDiary().ratio);ring.style.cssText=`left:${pos.x*100}%;top:${pos.y*100}%;width:${s.size/W*100}%;height:${s.size/H*100}%;transform:translate(-50%,-50%) rotate(${s.rotation}rad)`;
+  ring.hidden=!s;$('#object-actions').hidden=!s;$('#sticker-tools').hidden=!s||reading;$('#keyboard-selected').hidden=!s;if(!s)return;
+  const [W,H]=dimensions(displayDiary()),pos=stickerPosition(s,displayDiary().ratio);const actions=$('#object-actions'),bounds=canvas.getBoundingClientRect(),half=Math.min(.48,actions.offsetWidth/(2*bounds.width)+.01),top=pos.y-s.size/H/2-14/H;actions.style.cssText=`left:${Math.max(half,Math.min(1-half,pos.x))*100}%;top:${Math.max(actions.offsetHeight/bounds.height+.01,top)*100}%`;ring.style.cssText=`left:${pos.x*100}%;top:${pos.y*100}%;width:${s.size/W*100}%;height:${s.size/H*100}%;transform:translate(-50%,-50%) rotate(${s.rotation}rad)`;
   $<HTMLInputElement>('#sticker-size').value=String(s.size);$<HTMLInputElement>('#sticker-rotation').value=String(s.rotation*180/Math.PI);
   $<HTMLInputElement>('#quick-sticker-size').value=String(s.size);$<HTMLInputElement>('#quick-sticker-rotation').value=String(s.rotation*180/Math.PI);
 }
+$('#object-delete').onclick=()=>$('#remove-sticker').click();$('#object-done').onclick=()=>$('#deselect-sticker').click();
+for(const [id,delta] of [['object-smaller',-12],['object-larger',12]] as const)$('#'+id).onclick=()=>{const s=diary.stickers.find(s=>s.id===selectedSticker);if(s){s.size=Math.max(24,Math.min(150,s.size+delta));changed();}};
 $('#sticker-search').oninput=renderStickerLibrary;
 $('#sticker-categories').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-category]');if(b){stickerCategory=b.dataset.category!;renderStickerLibrary();}};
 $('#sticker-grid').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-sticker]');if(b)addSticker(b.dataset.sticker!);};

@@ -1,3 +1,4 @@
+import {graphemes} from './inline-content';
 export type ThemeId = 'sketch' | 'cream' | 'travel' | 'blue' | 'forest' | 'film' | 'chat' | 'pocket';
 export type Ratio = 'landscape' | 'portrait';
 export type Layout = 'single' | 'duo' | 'trio' | 'wall';
@@ -13,6 +14,7 @@ export interface Diary {
   theme: ThemeId; ratio: Ratio; seconds: number; fit: 'cover' | 'contain';
   decoration: number; originalAudio: boolean; pageMedia: Record<string, string>;
   stickers: StickerPlacement[];
+  inlineStickers?:Record<string,string>;
   layout: Layout; pageSlots: Record<string,string[]>;
 }
 export interface Entry { id: string; diary: Diary; assets: Asset[]; updatedAt: number }
@@ -39,7 +41,7 @@ export interface TextLine { text: string; paragraph: number; first: boolean }
 const closing = /^[，。！？、；：）》」』】…,.!?;:]/u;
 export function wrapText(text: string, width: number, measure: (s: string) => number): string[] {
   const result: string[] = []; let line = '';
-  for (const char of Array.from(text)) {
+  for (const char of graphemes(text)) {
     if (line && measure(line + char) > width && !closing.test(char)) { result.push(line); line = char; }
     else line += char;
   }
@@ -73,6 +75,7 @@ export function validateDiary(input: unknown): Diary {
     originalAudio: d.originalAudio === true, pageMedia,
     layout: ['single','duo','trio','wall'].includes(String(d.layout))?d.layout as Layout:'single',
     pageSlots: d.pageSlots&&typeof d.pageSlots==='object'?Object.fromEntries(Object.entries(d.pageSlots).filter(([k,v])=>/^\d+$/.test(k)&&Number(k)<500&&Array.isArray(v)).map(([k,v])=>[k,(v as unknown[]).slice(0,4).map(id=>typeof id==='string'?id:'')])):{},
+    inlineStickers: d.inlineStickers&&typeof d.inlineStickers==='object'?Object.fromEntries(Object.entries(d.inlineStickers).filter(([k,v])=>/^[\uE000-\uF8FF]$/.test(k)&&typeof v==='string'&&/^[a-zA-Z0-9:_-]{1,80}$/.test(v)).slice(0,1000)):{},
     stickers: Array.isArray(d.stickers)?d.stickers.slice(0,100).filter((s:any)=>s&&typeof s.id==='string'&&typeof s.kind==='string'&&Number.isFinite(s.x)&&Number.isFinite(s.y)).map((s:any)=>({id:s.id.slice(0,80),kind:s.kind.slice(0,80),...(validateStickerPositions(s.positions)?{positions:validateStickerPositions(s.positions)}:{}),page:Number.isFinite(Number(s.page))?Math.max(0,Math.min(499,Math.floor(Number(s.page)||0))):0,x:Math.max(.02,Math.min(.98,s.x)),y:Math.max(.02,Math.min(.98,s.y)),size:Math.max(24,Math.min(150,Number(s.size)||70)),rotation:Math.max(-.6,Math.min(.6,Number(s.rotation)||0))})):[] };
 }
 export const slotCount=(layout:Layout)=>({single:1,duo:2,trio:3,wall:4}[layout]);

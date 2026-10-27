@@ -1,9 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { paginate, wrapText, validateDiary, initialDiary, themes, calendarCells, slotCount, sortEntries, stickerPosition, type Entry } from '../src/model';
-import { mediaRects,mediaForSlot,editRegions } from '../src/renderer';
+import { mediaRects,mediaForSlot,editRegions,paperBounds } from '../src/renderer';
 import type { LoadedMedia } from '../src/media';
 const measure=(s:string)=>Array.from(s).length*10;
+
+test('八款实物纸页的照片组按纸面居中，含白框后两侧留白对称',()=>{
+  for(const theme of themes)for(const layout of ['single','duo','trio','wall'] as const){
+    const d={...initialDiary(),theme:theme.id,layout},paper=paperBounds(d),photos=mediaRects(d);
+    const left=Math.min(...photos.map(r=>r.x)),right=Math.max(...photos.map(r=>r.x+r.w));
+    assert.ok(Math.abs((left+right)/2-(paper.x+paper.w/2))<.01,`${theme.id}/${layout} 水平居中`);
+    const frame=theme.id==='cream'?17:theme.id==='film'?23:10;
+    assert.ok(left-frame-paper.x>=59);assert.ok(paper.x+paper.w-right-frame>=59);
+    const mood=editRegions(d).find(r=>r.kind==='mood')!;
+    const top=Math.min(...photos.map(r=>r.y))-(theme.id==='film'?25:21);
+    assert.ok(Math.abs((top+mood.y+mood.h)/2-(paper.y+paper.h/2))<1);
+    assert.ok(mood.y+mood.h<=paper.y+paper.h-30);
+  }
+});
 test('长中文分页不丢字，保留段落顺序',()=>{
   const body='今天我们到公园看花。'.repeat(80)+'\n第二段是一个新故事。';
   const pages=paginate(body,100,7,measure);
