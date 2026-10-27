@@ -1,0 +1,10 @@
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+const assets=(await readdir(new URL('../dist/assets/',import.meta.url))).map(n=>`assets/${n}`);
+const digest=createHash('sha256').update(assets.join('|')+await readFile(new URL('../dist/index.html',import.meta.url),'utf8')).digest('hex').slice(0,12);
+const swURL=new URL('../dist/sw.js',import.meta.url);
+let source=await readFile(swURL,'utf8');
+source=source.replace("const CACHE='daybook-v1';",`const CACHE='daybook-${digest}';\nconst PRECACHE=${JSON.stringify(assets)};`);
+source=source.replace('await cache.addAll([...paths,','await cache.addAll([...PRECACHE.map(p=>new URL(p,root).href),...paths,');
+await writeFile(swURL,source);
+console.log(`Offline cache prepared: ${assets.length} assets (${digest})`);

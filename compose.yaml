@@ -1,0 +1,6 @@
+services:
+  daybook:
+    build: .
+    ports:
+      - "8798:80"
+    restart: unless-stopped
