@@ -1,7 +1,7 @@
 import { Output, Mp4OutputFormat, WebMOutputFormat, BufferTarget, CanvasSource, AudioBufferSource,
   Input, BlobSource, ALL_FORMATS, AudioBufferSink, canEncodeVideo, canEncodeAudio } from 'mediabunny';
 import type { Diary, TextLine } from './model';
-import { render, activeMedia } from './renderer';
+import { render, mediaRects, mediaForSlot } from './renderer';
 import { seek, type LoadedMedia } from './media';
 export interface ExportOptions { format: 'mp4'|'webm'; size: number; signal: AbortSignal; progress: (value:number,message:string)=>void }
 function check(signal:AbortSignal){if(signal.aborted)throw new DOMException('导出已取消','AbortError');}
@@ -43,10 +43,11 @@ export async function exportVideo(d:Diary,pages:TextLine[][],media:LoadedMedia[]
   try {
     await output.start();const frames=Math.round(d.seconds*24);
     for(let p=0;p<pages.length;p++){
-      check(o.signal);const m=activeMedia(d,p,media);
+      check(o.signal);const shown=[...new Set(mediaRects(d).map((_,i)=>mediaForSlot(d,p,i,media)))];
+      const m=shown.find(m=>m?.asset.type==='video');
       if(sound){o.progress(p/pages.length,`正在读取第 ${p+1} 页原声`);await sound.add(await pageAudio(m,d.seconds,o.signal));}
       for(let f=0;f<frames;f++) {
-        check(o.signal);await seek(m,f/24);render(canvas,d,pages,p,media,f/24,true);
+        check(o.signal);await Promise.all(shown.map(m=>seek(m,f/24)));render(canvas,d,pages,p,media,f/24,true);
         await video.add(p*d.seconds+f/24,1/24);
         if(f%8===0){o.progress((p*frames+f)/(pages.length*frames),`正在生成第 ${p+1} / ${pages.length} 页`);await new Promise(r=>setTimeout(r,0));}
       }

@@ -1,11 +1,16 @@
 export type ThemeId = 'sketch' | 'cream' | 'travel' | 'blue' | 'forest' | 'film' | 'chat' | 'pocket';
 export type Ratio = 'landscape' | 'portrait';
+export type Layout = 'single' | 'duo' | 'trio' | 'wall';
+export interface StickerPlacement { id: string; kind: string; page: number; x: number; y: number; size: number; rotation: number }
 export interface Diary {
   version: 1; title: string; date: string; body: string; note: string; mood: string;
   theme: ThemeId; ratio: Ratio; seconds: number; fit: 'cover' | 'contain';
   decoration: number; originalAudio: boolean; pageMedia: Record<string, string>;
+  stickers: StickerPlacement[];
+  layout: Layout; pageSlots: Record<string,string[]>;
 }
-export interface Asset { id: string; name: string; type: 'image' | 'video'; blob: Blob; duration?: number }
+export interface Entry { id: string; diary: Diary; assets: Asset[]; updatedAt: number }
+export interface Asset { id: string; name: string; type: 'image' | 'video'; blob: Blob; duration?: number; role?: 'sticker' }
 export interface Theme { id: ThemeId; name: string; hint: string; paper: string; accent: string; cover: string; ink: string }
 export const themes: Theme[] = [
   { id: 'sketch', name: '手绘框框', hint: '把小心情，画在字里', paper: '#fffcf2', accent: '#bc806f', cover: '#5f7263', ink: '#343b32' },
@@ -22,7 +27,7 @@ export const initialDiary = (): Diary => ({
   version: 1, title: '把日子过成喜欢的样子', date: localDate(),
   body: '今天没有什么大事，\n只是和喜欢的人，去公园坐了一会儿。\n\n风吹过树梢，阳光刚刚好。\n买了一束小花，也给自己买了喜欢的面包。\n\n原来那些不起眼的小瞬间，\n也值得认真收藏。',
   note: '今天的小确幸：有阳光，有花，也有你。', mood: '小小的幸福', theme: 'sketch',
-  ratio: 'landscape', seconds: 6, fit: 'cover', decoration: 2, originalAudio: false, pageMedia: {},
+  ratio: 'landscape', seconds: 6, fit: 'cover', decoration: 2, originalAudio: false, pageMedia: {}, stickers: [], layout:'trio', pageSlots:{},
 });
 export interface TextLine { text: string; paragraph: number; first: boolean }
 const closing = /^[，。！？、；：）》」』】…,.!?;:]/u;
@@ -54,10 +59,19 @@ export function validateDiary(input: unknown): Diary {
   if ((d.body as string).length > 10000) throw new Error('日记最多支持 10000 字');
   const theme = themes.find(t => t.id === d.theme)?.id ?? 'sketch';
   const pageMedia: Record<string, string> = {};
-  if (d.pageMedia && typeof d.pageMedia === 'object') for (const [k,v] of Object.entries(d.pageMedia)) if (/^\d+$/.test(k) && typeof v === 'string') pageMedia[k] = v;
+  if (d.pageMedia && typeof d.pageMedia === 'object') for (const [k,v] of Object.entries(d.pageMedia)) if (/^\d+$/.test(k) && Number(k)<500 && typeof v === 'string') pageMedia[k] = v;
   return { version: 1, title: (d.title as string).slice(0,60), date: (d.date as string).slice(0,10),
     body: d.body as string, note: (d.note as string).slice(0,120), mood: (d.mood as string).slice(0,30),
     theme, ratio: d.ratio === 'portrait' ? 'portrait' : 'landscape', seconds: Math.max(3,Math.min(12,Number(d.seconds)||6)),
     fit: d.fit === 'contain' ? 'contain' : 'cover', decoration: Math.max(0,Math.min(2,Number(d.decoration)||0)),
-    originalAudio: d.originalAudio === true, pageMedia };
+    originalAudio: d.originalAudio === true, pageMedia,
+    layout: ['single','duo','trio','wall'].includes(String(d.layout))?d.layout as Layout:'single',
+    pageSlots: d.pageSlots&&typeof d.pageSlots==='object'?Object.fromEntries(Object.entries(d.pageSlots).filter(([k,v])=>/^\d+$/.test(k)&&Number(k)<500&&Array.isArray(v)).map(([k,v])=>[k,(v as unknown[]).slice(0,4).map(id=>typeof id==='string'?id:'')])):{},
+    stickers: Array.isArray(d.stickers)?d.stickers.slice(0,100).filter((s:any)=>s&&typeof s.id==='string'&&typeof s.kind==='string'&&Number.isFinite(s.x)&&Number.isFinite(s.y)).map((s:any)=>({id:s.id.slice(0,80),kind:s.kind.slice(0,80),page:Number.isFinite(Number(s.page))?Math.max(0,Math.min(499,Math.floor(Number(s.page)||0))):0,x:Math.max(.02,Math.min(.98,s.x)),y:Math.max(.02,Math.min(.98,s.y)),size:Math.max(24,Math.min(150,Number(s.size)||70)),rotation:Math.max(-.6,Math.min(.6,Number(s.rotation)||0))})):[] };
+}
+export const slotCount=(layout:Layout)=>({single:1,duo:2,trio:3,wall:4}[layout]);
+export function sortEntries(entries: Entry[]): Entry[] { return [...entries].sort((a,b)=>b.diary.date.localeCompare(a.diary.date)||b.updatedAt-a.updatedAt); }
+export function calendarCells(year:number,month:number): (string|null)[] {
+  const first=(new Date(year,month,1).getDay()+6)%7,last=new Date(year,month+1,0).getDate();
+  return Array.from({length:42},(_,i)=>i<first||i>=first+last?null:`${year}-${String(month+1).padStart(2,'0')}-${String(i-first+1).padStart(2,'0')}`);
 }

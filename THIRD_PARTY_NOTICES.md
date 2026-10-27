@@ -1,6 +1,6 @@
 # 许可与素材来源
 
-项目源代码：MIT，见 LICENSE。
+项目源代码与本项目原创绘图：MIT，见 LICENSE。本文对应 v0.2 的素材与依赖范围。
 
 运行时依赖：
 
@@ -12,9 +12,17 @@ Vite 构建会在发布文件中保留依赖的许可注释。源仓库的完整
 项目内素材：
 
 - `src/media.ts` 中公园野餐 SVG：本项目原创，MIT。
-- `src/renderer.ts` 中花朵、信封、表情、纸张纹理等：本项目程序绘制，MIT。
+- `src/catalog.ts` 中 60 个手绘 SVG（含 8 种心情、常用图标、植物、生活插画、原创猫兔等表情）：本项目原创，MIT。
+- `src/renderer.ts` 中本子封面、纸张纹理、撕纸、格纹胶带、纸夹、地图碎片、票根、邮戳、植物与其他模板绘图：本项目程序绘制，MIT。
 - `public/icon.svg` 和 PNG 图标：本项目原创，MIT。
 - `docs/studio.png`：使用原创示例内容的本项目界面截图，MIT。
 - 字体：调用用户设备已安装字体；未捆绑或分发第三方字体文件。
 
-README 中链接的竞品用于说明研究来源，不代表授权使用竞品模板、贴纸或商标。
+开发与测试依赖：
+
+- [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB)：Apache-2.0，仅用于本地/CI 的 IndexedDB 迁移与存储测试，不作为浏览器运行时依赖打包。
+- 其他开发依赖及其确切版本记录在 package-lock.json，许可证保留在各依赖包内。
+
+模板研究参考了 Hobonichi、TRAVELER'S COMPANY、MIDORI、Filofax 的官方产品与使用介绍，见 [真实手账参考](docs/TEMPLATE_REFERENCES.md)。参考用于研究装订、材质和记录方式，未下载、捆绑或分发其品牌模板、用户照片、贴纸或字体，也不表示品牌合作或背书。
+
+README 中链接的竞品同样仅用于说明研究来源。用户上传的图片、表情包、视频和自定义贴纸不会因此自动获得 MIT 许可；使用与分享权限由上传者自行确认。项目默认示例不包含影视角色、演员素材或第三方商业表情包。
