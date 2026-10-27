@@ -7,7 +7,8 @@ self.addEventListener('install',event=>{
     if(!response.ok)throw new Error('App shell unavailable');
     const html=await response.clone().text();await cache.put(root,response);
     const paths=[...html.matchAll(/(?:src|href)="([^"#]+\.(?:js|css))"/g)].map(m=>new URL(m[1],root).href);
-    await cache.addAll([...paths,new URL('icon.svg',root).href,new URL('manifest.webmanifest',root).href]);
+    const resources=[...paths,new URL('icon.svg',root).href,new URL('icon-192.png',root).href,new URL('icon-512.png',root).href,new URL('manifest.webmanifest',root).href];
+    await cache.addAll([...new Set(resources)]);
   })());
 });
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
