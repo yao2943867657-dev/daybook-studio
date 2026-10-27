@@ -20,15 +20,15 @@ function geometry(d:Diary):Geometry {
     const left=d.theme==='forest'?228:d.theme==='blue'?195:145;
     return {title:{x:left,y:105,w:780-left,h:125},body:{x:left,y:808,w:780-left,h:416,size:34,step:52,lines:8},note:{x:left,y:1310,w:780-left,h:126},mood:{x:left,y:735,w:780-left,h:55},media:{...media,x:left,w:780-left}};
   }
-  const common:Geometry={title:{x:169,y:127,w:539,h:118},body:{x:185,y:292,w:518,h:311,size:32,step:44,lines:7},note:{x:183,y:669,w:505,h:100},mood:{x:956,y:748,w:448,h:55},media:{x:920,y:176,w:514,h:525}};
+  const common:Geometry={title:{x:169,y:127,w:539,h:118},body:{x:185,y:292,w:518,h:311,size:32,step:44,lines:7},note:{x:183,y:669,w:505,h:100},mood:{x:932,y:698,w:482,h:64},media:{x:920,y:176,w:514,h:485}};
   switch(d.theme){
-    case 'cream':return {...common,title:{x:183,y:145,w:520,h:108},body:{x:187,y:305,w:515,h:304,size:32,step:43,lines:7},media:{x:960,y:206,w:466,h:445}};
-    case 'travel':return {...common,title:{x:247,y:137,w:460,h:117},body:{x:247,y:309,w:455,h:304,size:31,step:43,lines:7},note:{x:247,y:679,w:455,h:97},media:{x:903,y:184,w:435,h:494}};
-    case 'blue':return {...common,title:{x:230,y:143,w:480,h:115},body:{x:229,y:308,w:475,h:309,size:31,step:44,lines:7},note:{x:230,y:677,w:470,h:98},media:{x:930,y:174,w:483,h:529}};
-    case 'forest':return {...common,title:{x:251,y:139,w:453,h:114},body:{x:255,y:308,w:448,h:309,size:31,step:44,lines:7},note:{x:253,y:677,w:450,h:97},media:{x:912,y:190,w:490,h:494}};
-    case 'film':return {...common,title:{x:162,y:137,w:548,h:111},body:{x:180,y:302,w:524,h:306,size:31,step:43,lines:7},media:{x:903,y:250,w:542,h:335}};
-    case 'chat':return {...common,title:{x:182,y:133,w:523,h:109},body:{x:182,y:299,w:520,h:309,size:32,step:44,lines:7},media:{x:928,y:162,w:507,h:540}};
-    case 'pocket':return {...common,title:{x:169,y:128,w:538,h:113},body:{x:182,y:307,w:518,h:304,size:32,step:43,lines:7},media:{x:925,y:188,w:506,h:500}};
+    case 'cream':return {...common,title:{x:183,y:145,w:520,h:108},body:{x:187,y:305,w:515,h:304,size:32,step:43,lines:7},mood:{x:958,y:690,w:465,h:64},media:{x:951,y:184,w:484,h:444}};
+    case 'travel':return {...common,title:{x:247,y:137,w:460,h:117},body:{x:247,y:309,w:455,h:304,size:31,step:43,lines:7},note:{x:247,y:679,w:455,h:97},media:{x:903,y:184,w:435,h:474}};
+    case 'blue':return {...common,title:{x:230,y:143,w:480,h:115},body:{x:229,y:308,w:475,h:309,size:31,step:44,lines:7},note:{x:230,y:677,w:470,h:98},media:{x:930,y:174,w:483,h:486}};
+    case 'forest':return {...common,title:{x:251,y:139,w:453,h:114},body:{x:255,y:308,w:448,h:309,size:31,step:44,lines:7},note:{x:253,y:677,w:450,h:97},media:{x:912,y:190,w:490,h:470}};
+    case 'film':return {...common,title:{x:162,y:137,w:548,h:111},body:{x:180,y:302,w:524,h:306,size:31,step:43,lines:7},mood:{x:933,y:650,w:482,h:64},media:{x:903,y:235,w:542,h:350}};
+    case 'chat':return {...common,title:{x:182,y:133,w:523,h:109},body:{x:182,y:299,w:520,h:309,size:32,step:44,lines:7},media:{x:928,y:162,w:507,h:498}};
+    case 'pocket':return {...common,title:{x:169,y:128,w:538,h:113},body:{x:182,y:307,w:518,h:304,size:32,step:43,lines:7},media:{x:925,y:188,w:506,h:472}};
     default:return common;
   }
 }
@@ -221,7 +221,7 @@ function writing(c:Ctx,d:Diary,t:Theme,g:Geometry,content:TextLine[],time:number
   const offset=short?Math.max(0,(g.body.h-(lines.length-1)*step-bodySize)/2):0;
   if(editingField!=='body')lines.forEach((l,i)=>{c.save();c.globalAlpha=animate?Math.max(0,Math.min(1,(time-i*.25)*3)):1;txt(c,l.text,g.body.x,g.body.y+offset+bodySize+i*step,bodySize,t.ink);c.restore();});
   if(editingField!=='note'){txt(c,d.theme==='travel'?'路上的小记':d.theme==='film'?'观后感 / 小批注':'我的小批注',g.note.x,g.note.y+11,20,t.accent);c.font=`${d.ratio==='portrait'?26:23}px ${hand}`;wrapText(d.note||'把平凡的一天，认真收好。',g.note.w-5,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.note.x,g.note.y+47+i*31,d.ratio==='portrait'?26:23,t.ink));}
-  if(editingField!=='mood'){const mx=g.mood.x,my=g.mood.y;if(g.mood.w>250){drawSticker(c,getMoodSticker(d.mood),mx+25,my+22,57);txt(c,`今日心情  ${d.mood}`,mx+67,my+31,22,t.ink);}else{txt(c,'今日心情',mx,my+6,20,t.accent);drawSticker(c,getMoodSticker(d.mood),mx+28,my+52,61);txt(c,d.mood.slice(0,7),mx+65,my+57,19,t.ink);}}
+  if(editingField!=='mood'){const mx=g.mood.x,my=g.mood.y;if(g.mood.w>250){drawSticker(c,getMoodSticker(d.mood),mx+25,my+22,64);txt(c,`今日心情  ${d.mood}`,mx+67,my+31,26,t.ink);}else{txt(c,'今日心情',mx,my+6,20,t.accent);drawSticker(c,getMoodSticker(d.mood),mx+28,my+52,61);txt(c,d.mood.slice(0,7),mx+65,my+57,19,t.ink);}}
 }
 function userStickers(c:Ctx,d:Diary,page:number,media:LoadedMedia[],W:number,H:number){
   for(const s of d.stickers??[]){if(s.page!==page)continue;const pos=stickerPosition(s,d.ratio),x=pos.x*W,y=pos.y*H;if(s.kind.startsWith('asset:')){const image=media.find(m=>m.asset.id===s.kind.slice(6));if(image&&image.element instanceof HTMLImageElement){const e=image.element,scale=s.size/Math.max(e.naturalWidth,e.naturalHeight);c.save();c.translate(x,y);c.rotate(s.rotation);c.drawImage(e,-e.naturalWidth*scale/2,-e.naturalHeight*scale/2,e.naturalWidth*scale,e.naturalHeight*scale);c.restore();}}else drawSticker(c,s.kind,x,y,s.size,s.rotation);}

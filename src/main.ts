@@ -1,6 +1,7 @@
 import './style.css';
 import './notebook.css';
 import './inline-editor.css';
+import './workspace-ui.css';
 import { bodyPageRange, replaceBodyRange } from './text-editing';
 import { themes, initialDiary, localDate, sortEntries, calendarCells, slotCount, stickerPosition, type StickerPlacement, type Entry, type Diary, type Asset, type TextLine } from './model';
 import { prepare, release, seek, sampleAssets, type LoadedMedia } from './media';
@@ -28,6 +29,9 @@ let inlineEdit:{field:WritingField;start:number;end:number;prefix:string;suffix:
 let keyboardOpen=false,keyboardTab:'stickers'|'emoji'|'mood'='stickers',keyboardQuery='',keyboardCategory='推荐';
 let commandRange:{start:number;end:number}|undefined;
 let recentStickers:string[]=[];
+type ReaderView={id:string;page:number;ratio?:Diary['ratio'];reading:boolean};
+let savedView:ReaderView|undefined;
+try{const v=JSON.parse(sessionStorage.getItem('daybook-reader-view')??'null');if(v&&typeof v.id==='string')savedView={id:v.id,page:Number.isInteger(v.page)?Math.max(0,Math.min(499,v.page)):0,ratio:v.ratio==='portrait'||v.ratio==='landscape'?v.ratio:undefined,reading:v.reading!==false};}catch{}
 try{const saved=JSON.parse(localStorage.getItem('daybook-recent-stickers')??'[]');if(Array.isArray(saved))recentStickers=saved.filter((s:unknown)=>typeof s==='string').slice(0,16);}catch{}
 const smallScreen=window.matchMedia('(max-width:760px)');
 const displayDiary=():Diary=>({...diary,ratio:viewRatio??(smallScreen.matches?'portrait':'landscape')});
@@ -36,9 +40,9 @@ const requiredPages=()=>Math.max(1,Math.ceil(mediaCount()/slotCount(diary.layout
 let deferredInstall:Event & {prompt?:()=>Promise<void>}|undefined;
 const app=document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML=`
-<header class="topbar"><a class="brand" href="./" aria-label="今日成册首页"><span class="brand-mark">${icon('book')}</span><span>今日成册<small>Daybook Studio</small></span></a>
-<div class="top-caption">翻开日常，收藏心情。</div><nav aria-label="日记工具"><span id="save-state" role="status">准备好了</span><button class="quiet" id="calendar-open" aria-label="日历与日记">${icon('calendar')}<span>日历与日记</span></button><button class="quiet" id="new-entry" aria-label="写今天">${icon('plus')}<span>写今天</span></button><button class="quiet" id="mode-toggle">${icon('pen')}<span>编辑这篇</span></button><button class="primary" id="export-open">${icon('download')}<span>导出 / 分享</span></button></nav></header>
-<main class="workspace reading">
+<header class="topbar"><a class="brand" href="./" aria-label="口袋日记首页"><span class="brand-mark">${icon('book')}</span><span>口袋日记<small>Pocket Diary</small></span></a>
+<div class="top-caption">翻开日常，收藏心情。</div><nav aria-label="日记工具"><span id="save-state" role="status">准备好了</span><button class="quiet template-trigger" id="templates-open" aria-label="选择日记本模板" aria-expanded="false">${icon('book')}<span>模板</span></button><button class="quiet" id="calendar-open" aria-label="日历与日记">${icon('calendar')}<span>日历与日记</span></button><button class="quiet" id="new-entry" aria-label="写今天">${icon('plus')}<span>写今天</span></button><button class="quiet" id="mode-toggle" aria-label="编辑这篇">${icon('pen')}<span>编辑这篇</span></button><button class="primary" id="export-open" aria-label="导出分享">${icon('download')}<span>导出 / 分享</span></button></nav></header>
+<main class="workspace reading is-loading" aria-busy="true">
 <aside class="editor" aria-label="日记编辑">
 <div class="editor-intro"><h1>今天，想记点什么？</h1><p>照片、几句话，就是一页好日子。</p></div>
 <section><div class="section-title"><h2><span>1</span> 放入今天的素材</h2><span id="asset-count">0 / 20</span></div>
@@ -71,8 +75,15 @@ app.innerHTML=`
 <section class="sticker-keyboard" id="sticker-keyboard" role="region" aria-label="表情与贴纸键盘" hidden><div class="keyboard-heading"><div class="keyboard-tabs"><button data-keyboard-tab="stickers">贴到书页</button><button data-keyboard-tab="emoji">输入表情</button><button data-keyboard-tab="mood">今日心情</button></div><button id="keyboard-close" class="icon-button" aria-label="收起贴纸键盘">×</button></div><div class="keyboard-search"><input type="search" id="keyboard-search" aria-label="搜索表情与贴纸" placeholder="搜猫猫、抱抱、开心、花…"><button class="quiet" id="keyboard-upload" aria-label="添加自己的图片贴纸">＋ 图片</button></div><div id="keyboard-categories" class="keyboard-categories"></div><div id="keyboard-grid" class="keyboard-grid"></div><div class="keyboard-selected" id="keyboard-selected" hidden><label>大小<input id="quick-sticker-size" type="range" min="24" max="150"></label><label>旋转<input id="quick-sticker-rotation" type="range" min="-30" max="30"></label><button id="quick-sticker-remove" class="quiet">移除</button><button id="quick-sticker-done" class="quiet">摆好了</button></div><p id="keyboard-hint">点一下贴到书页，拖动到喜欢的位置。可直接粘贴图片。</p></section>
 <dialog id="export-dialog"><form method="dialog"><div class="dialog-heading"><div><h2>把今天带走</h2><p>保存日记，发到小红书或朋友圈。</p></div><button class="icon-button" aria-label="关闭">×</button></div></form><div class="export-choices"><button class="export-card" id="export-png">${icon('image')}<strong>日记图片</strong><span>保存当前页 · PNG</span></button><button class="export-card" id="export-video">${icon('play')}<strong>日记视频</strong><span>这篇的全部页 · 24 帧/秒</span></button></div><div class="export-settings"><label class="field">分享画幅<select id="export-ratio"><option value="portrait">9:16 竖屏 · 小红书 / 朋友圈</option><option value="landscape">16:9 横屏 · 展开双页</option></select></label><label class="field">视频格式<select id="format"><option value="mp4">MP4（优先）</option><option value="webm">WebM（备选）</option></select></label><label class="field">清晰度<select id="size"><option value="720">720p · 更轻巧</option><option value="1080">1080p · 更清晰</option></select></label></div><p class="field-hint">保存视频后，在小红书或微信相册发布。视频最长 3 分钟，导出期间请保持页面在前台。多视频页面以第一个视频的原声为主。</p><div id="export-progress" hidden><progress max="1" value="0"></progress><p role="status" id="progress-text"></p><button class="quiet" id="cancel-export">取消导出</button></div><p id="export-error" role="alert"></p><div id="export-result" hidden><video controls playsinline aria-label="导出成片预览"></video><a class="primary" download>保存视频</a><button class="quiet" id="share-video">分享视频</button><small>系统分享不可用时，请先保存到相册，再到小红书或朋友圈发布。</small></div></dialog>
 <dialog id="message-dialog"><h2 id="message-title"></h2><p id="message-body"></p><div class="dialog-actions"><button id="message-cancel" class="quiet">取消</button><button id="message-ok" class="primary">知道了</button></div></dialog>
-<div id="toast" role="status" class="toast" hidden></div>`;
+<div id="toast" role="status" class="toast" hidden></div>
+<section id="startup-state" class="startup-state" role="status" aria-live="polite"><div class="loading-notebook" aria-hidden="true"><i></i><i></i><i></i></div><h2 id="startup-title">正在翻开你的日记…</h2><p id="startup-description">照片和文字都保存在这台设备上。</p><div id="startup-actions" hidden><button class="primary" id="startup-retry">重新打开</button><button class="quiet" id="startup-import">导入备份</button></div></section>`;
 const $=<T extends HTMLElement=HTMLElement>(selector:string)=>document.querySelector<T>(selector)!;
+const templateBrowser=document.createElement('section');templateBrowser.id='template-browser';templateBrowser.className='template-browser';templateBrowser.hidden=true;templateBrowser.setAttribute('role','region');templateBrowser.setAttribute('aria-label','日记本模板与照片布局');
+templateBrowser.innerHTML='<button class="icon-button template-close" id="templates-close" aria-label="收起模板">×</button>';
+for(const selector of ['.edit-tools>.template-heading','#templates','.layout-heading'])templateBrowser.append($(selector));
+const templateTabs=document.createElement('div');templateTabs.className='template-tabs';templateTabs.setAttribute('aria-label','模板类型');templateTabs.innerHTML='<button data-template-tab="books" class="active" aria-pressed="true">本子样式</button><button data-template-tab="layout" aria-pressed="false">照片布局</button>';
+templateBrowser.insertBefore(templateTabs,templateBrowser.querySelector('#templates'));templateBrowser.querySelector<HTMLElement>('.layout-heading')!.hidden=true;
+app.append(templateBrowser);
 const canvas=$<HTMLCanvasElement>('#preview');const exportDialog=$<HTMLDialogElement>('#export-dialog');
 let toastTimer:ReturnType<typeof setTimeout>,resultURL='',resultBlob:Blob|undefined,resultName='';
 function toast(message:string){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
@@ -87,7 +98,7 @@ function fill(){
 }
 function stop(){playing=false;cancelAnimationFrame(raf);for(const m of media)if(m.element instanceof HTMLVideoElement)m.element.pause();document.querySelectorAll<HTMLVideoElement>('.inline-video video').forEach(v=>v.pause());$('#page-hotspots').hidden=false;$('#play').innerHTML=`${icon('play')} 动画预览`;}
 function paint(){render(canvas,displayDiary(),pages,page,media,999,false,inlineEdit?.field);updateStickerSelection();positionPageEditor();}
-function refresh(thumbnails=false){
+function refresh(thumbnails=false,rebuildHotspots=true){
   const displayed=displayDiary();if(!inlineEdit){pages=pagesFor(displayed,requiredPages());page=Math.min(page,pages.length-1);}
   const [w,h]=dimensions(displayed);canvas.width=w;canvas.height=h;canvas.classList.toggle('portrait',displayed.ratio==='portrait');$('.book-viewport').classList.toggle('portrait',displayed.ratio==='portrait');
   const chronological=[...sortEntries(entries)].reverse(),index=chronological.findIndex(e=>e.id===entryId);
@@ -102,11 +113,12 @@ function refresh(thumbnails=false){
   const select=$<HTMLSelectElement>('#page-media');select.innerHTML='<option value="">按顺序自动匹配</option>'+assets.filter(a=>a.role!=='sticker').map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');select.value=diary.pageSlots[String(page)]?.[0]??diary.pageMedia[String(page)]??'';
   $('#reading-hint').textContent=reading?'翻一页，遇见那天的自己。':'点文字直接修改 · 点照片直接替换 · 拖动贴纸自由摆放';
   $('#page-description').textContent=reading?'完整书页，视频点击才播放。':'照片与视频都能放进每个画框。';
-  paint();buildHotspots();renderMoods();
+  paint();if(rebuildHotspots)buildHotspots();renderMoods();
   if(thumbnails)document.querySelectorAll<HTMLCanvasElement>('[data-thumb]').forEach(c=>{
     const layouts:Record<string,Diary['layout']>={sketch:'single',cream:'duo',travel:'trio',blue:'wall',forest:'single',film:'trio',chat:'single',pocket:'duo'};
     const td={...diary,ratio:'landscape',layout:layouts[c.dataset.thumb!],theme:c.dataset.thumb,pageSlots:{},pageMedia:{}} as Diary;render(c,td,pagesFor(td),0,media);
   });
+  if(initialized)try{sessionStorage.setItem('daybook-reader-view',JSON.stringify({id:entryId,page,ratio:viewRatio,reading}));}catch{}
 }
 let revision=0;
 async function persist(){
@@ -167,9 +179,15 @@ for(const key of ['date','title','body','note','mood','fit','seconds','decoratio
   $(`#${key}`).addEventListener('input',()=>{if(busy)return;const value=$<HTMLInputElement|HTMLSelectElement>(`#${key}`).value;(diary as unknown as Record<string,unknown>)[key]=['seconds','decoration'].includes(key)?Number(value):value;changed(key==='fit'||key==='decoration');});
 }
 $('#original-audio').onchange=()=>{diary.originalAudio=$<HTMLInputElement>('#original-audio').checked;changed();};
-document.querySelectorAll<HTMLButtonElement>('[data-theme]').forEach(b=>b.onclick=()=>{if(busy)return;finishInlineEdit();diary.theme=b.dataset.theme as Diary['theme'];if(diary.theme==='pocket')diary.ratio='portrait';changed();});
+document.querySelectorAll<HTMLButtonElement>('[data-theme]').forEach(b=>b.onclick=()=>{if(busy)return;finishInlineEdit();diary.theme=b.dataset.theme as Diary['theme'];if(diary.theme==='pocket')diary.ratio='portrait';changed();closeTemplates();toast(`已换成${themes.find(t=>t.id===diary.theme)!.name}，文字和照片已保留`);});
+function closeTemplates(){templateBrowser.hidden=true;$('#templates-open').setAttribute('aria-expanded','false');}
+$('#templates-open').onclick=()=>{if(busy)return;if(!templateBrowser.hidden){closeTemplates();return;}finishInlineEdit();closeKeyboard();refresh(true);templateBrowser.hidden=false;$('#templates-open').setAttribute('aria-expanded','true');};
+$('#templates-close').onclick=closeTemplates;
+templateTabs.onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-template-tab]');if(!b)return;const layout=b.dataset.templateTab==='layout';$('#templates').hidden=layout;$('.layout-heading').hidden=!layout;templateTabs.querySelectorAll('button').forEach(button=>{const selected=button===b;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});};
+document.addEventListener('pointerdown',e=>{if(!templateBrowser.hidden&&e.target instanceof Element&&!e.target.closest('#template-browser,#templates-open'))closeTemplates();},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!templateBrowser.hidden){closeTemplates();$('#templates-open').focus({preventScroll:true});}});
 document.querySelectorAll<HTMLButtonElement>('[data-ratio]').forEach(b=>b.onclick=()=>{if(busy)return;finishInlineEdit();viewRatio=b.dataset.ratio as Diary['ratio'];stop();refresh();});
-document.querySelectorAll<HTMLButtonElement>('[data-layout]').forEach(b=>b.onclick=()=>{if(busy)return;diary.layout=b.dataset.layout as Diary['layout'];diary.pageSlots={};diary.pageMedia={};const count=pagesFor(displayDiary(),Math.max(1,Math.ceil(mediaCount()/slotCount(diary.layout)))).length;for(const s of diary.stickers)s.page=Math.min(s.page,count-1);selectedSticker='';changed(true);});
+document.querySelectorAll<HTMLButtonElement>('[data-layout]').forEach(b=>b.onclick=()=>{if(busy)return;diary.layout=b.dataset.layout as Diary['layout'];diary.pageSlots={};diary.pageMedia={};const count=pagesFor(displayDiary(),Math.max(1,Math.ceil(mediaCount()/slotCount(diary.layout)))).length;for(const s of diary.stickers)s.page=Math.min(s.page,count-1);selectedSticker='';changed(true);closeTemplates();});
 $('#page-media').onchange=()=>{const ids=diary.pageSlots[String(page)]??[];ids[0]=$<HTMLSelectElement>('#page-media').value;diary.pageSlots[String(page)]=ids;delete diary.pageMedia[String(page)];changed();};
 $('#prev').onclick=()=>void turn(-1);$('#next').onclick=()=>void turn(1);
 $('#assets').onclick=e=>{
@@ -215,8 +233,8 @@ async function createEntry(date=localDate(),sample=false){
 $('#new-diary').onclick=()=>void createEntry();
 $('#new-entry').onclick=async()=>{const today=sortEntries(entries).find(e=>e.diary.date===localDate());if(today){await openEntry(today);setMode(false);}else await createEntry();};
 $('#sample').onclick=()=>void createEntry(localDate(),true);
-$('#backup').onclick=async()=>{if(busy)return;try{await persist();toast('正在打包这篇日记…');download(await pack(diary,assets),`今日成册-${diary.date}.zip`);toast('这篇日记已备份，包含文字与原始素材');}catch(e){toast((e as Error).message);}};
-$('#backup-notebook').onclick=async()=>{if(busy)return;busy=true;try{await persist();toast('正在打包整本日记…');download(await packNotebook(entries),`今日成册-整本日记-${localDate()}.zip`);toast('整本日记备份已准备好');}catch(e){toast((e as Error).message);}finally{busy=false;}};
+$('#backup').onclick=async()=>{if(busy)return;try{await persist();toast('正在打包这篇日记…');download(await pack(diary,assets),`口袋日记-${diary.date}.zip`);toast('这篇日记已备份，包含文字与原始素材');}catch(e){toast((e as Error).message);}};
+$('#backup-notebook').onclick=async()=>{if(busy)return;busy=true;try{await persist();toast('正在打包整本日记…');download(await packNotebook(entries),`口袋日记-整本日记-${localDate()}.zip`);toast('整本日记备份已准备好');}catch(e){toast((e as Error).message);}finally{busy=false;}};
 $('#import-project').onclick=()=>$<HTMLInputElement>('#project-input').click();
 $<HTMLInputElement>('#project-input').onchange=async e=>{
   const file=(e.target as HTMLInputElement).files?.[0];if(!file)return;
@@ -225,13 +243,13 @@ $<HTMLInputElement>('#project-input').onchange=async e=>{
     const known=new Set(entries.map(e=>e.id));let firstImported:string|undefined;
     for(const raw of imported){const entry={...raw,id:known.has(raw.id)?crypto.randomUUID():raw.id};await saveEntry(entry);entries.push(entry);known.add(entry.id);firstImported??=entry.id;}
     entries=sortEntries(entries);busy=false;$<HTMLDialogElement>('#calendar-dialog').close();if(firstImported){const last=entries.find(e=>e.id===firstImported)!;await openEntry(last);}
-    toast(`已导入 ${imported.length} 篇日记，原有记录保留`);
+    if(!initialized)completeStartup();toast(`已导入 ${imported.length} 篇日记，原有记录保留`);
   }catch(e){toast((e as Error).message);}finally{busy=false;(e.target as HTMLInputElement).value='';}
 };
 $('#export-open').onclick=()=>{finishInlineEdit();closeKeyboard();stop();refresh();$('#export-error').textContent='';$<HTMLSelectElement>('#export-ratio').value=displayDiary().ratio;exportDialog.showModal();};
 $('#export-png').onclick=async()=>{
   const output=document.createElement('canvas');const d={...diary,ratio:$<HTMLSelectElement>('#export-ratio').value as Diary['ratio']};const [w,h]=dimensions(d);output.width=w;output.height=h;const pp=pagesFor(d,requiredPages());render(output,d,pp,Math.min(page,pp.length-1),media);
-  output.toBlob(blob=>{if(blob){download(blob,`今日成册-${diary.date}-${page+1}.png`);toast('日记图片已准备好');}else $('#export-error').textContent='图片导出失败，请重试';},'image/png');
+  output.toBlob(blob=>{if(blob){download(blob,`口袋日记-${diary.date}-${page+1}.png`);toast('日记图片已准备好');}else $('#export-error').textContent='图片导出失败，请重试';},'image/png');
 };
 $('#export-video').onclick=async()=>{
   if(busy)return;busy=true;stop();controller=new AbortController();$('#export-error').textContent='';$('#export-progress').hidden=false;$('#export-result').hidden=true;
@@ -245,7 +263,7 @@ $('#export-video').onclick=async()=>{
     const exportPages=pagesFor(exported,requiredPages());
     const blob=await exportVideo(exported,exportPages,media,{format,size:Number($<HTMLSelectElement>('#size').value),signal:controller.signal,progress:(v,msg)=>{$<HTMLProgressElement>('progress').value=v;$('#progress-text').textContent=`${msg} · ${Math.round(v*100)}%`;}});
     if(resultURL)URL.revokeObjectURL(resultURL);resultURL=URL.createObjectURL(blob);
-    resultBlob=blob;resultName=`今日成册-${diary.date}.${format}`;
+    resultBlob=blob;resultName=`口袋日记-${diary.date}.${format}`;
     $<HTMLVideoElement>('#export-result video').src=resultURL;const a=$<HTMLAnchorElement>('#export-result a');a.href=resultURL;a.download=resultName;$('#export-result').hidden=false;
     $('#progress-text').textContent=`视频生成完成 · ${(blob.size/1024/1024).toFixed(1)} MB`;
   }catch(e){$('#export-error').textContent=(e as Error).name==='AbortError'?'已取消导出，日记仍保留。':(e as Error).message;}
@@ -254,13 +272,15 @@ $('#export-video').onclick=async()=>{
 $('#cancel-export').onclick=()=>controller?.abort();
 exportDialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});exportDialog.querySelector('form')!.addEventListener('submit',e=>{if(busy)e.preventDefault();});
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;});
-$('#install').onclick=async()=>{if(deferredInstall?.prompt)await deferredInstall.prompt();else await message('把今日成册放到桌面','电脑：在 Chrome / Edge 菜单中选择“安装此应用”。iPhone：用 Safari 打开 HTTPS 地址，点分享 → 添加到主屏幕。Android：在浏览器菜单中选择安装或添加到主屏幕。离线使用前请先联网打开一次。');};
+$('#install').onclick=async()=>{if(deferredInstall?.prompt)await deferredInstall.prompt();else await message('把口袋日记放到桌面','电脑：在 Chrome / Edge 菜单中选择“安装此应用”。iPhone：用 Safari 打开 HTTPS 地址，点分享 → 添加到主屏幕。Android：在浏览器菜单中选择安装或添加到主屏幕。离线使用前请先联网打开一次。');};
 window.addEventListener('beforeunload',e=>{if(busy)controller?.abort();if(unsaved){e.preventDefault();e.returnValue='';}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&unsaved)void persist().catch(()=>{});});
 
 function setMode(read:boolean){
   finishInlineEdit();closeKeyboard();
   reading=read;stop();if(read)selectedSticker='';$('.workspace').classList.toggle('reading',read);
   $('#mode-toggle').innerHTML=`${icon(read?'pen':'book')}<span>${read?'编辑这篇':'完成 · 阅读'}</span>`;
+  $('#mode-toggle').setAttribute('aria-label',read?'编辑这篇':'完成并阅读');
   refresh();
 }
 $('#mode-toggle').onclick=()=>setMode(!reading);
@@ -305,6 +325,7 @@ $('#calendar-write').onclick=async()=>{if(busy)return;$<HTMLDialogElement>('#cal
 const fieldNames={title:'日记标题',body:'今天的日记',note:'我的小批注',mood:'今日心情'};
 function positionPageEditor(){
   if(!inlineEdit)return;const d=displayDiary(),r=editRegions(d).find(r=>r.kind===inlineEdit!.field)!;
+  document.querySelectorAll<HTMLButtonElement>('[data-field]').forEach(b=>b.classList.toggle('active-field',b.dataset.field===inlineEdit?.field));
   const [W,H]=dimensions(d),bounds=canvas.getBoundingClientRect(),scale=bounds.width/W;
   $('#page-editor-shell').style.cssText=hotspotStyle(r,W,H);
   const input=$<HTMLTextAreaElement>('#page-editor');
@@ -313,7 +334,7 @@ function positionPageEditor(){
   input.style.lineHeight=String(inlineEdit.field==='body'?writingStyle(d).bodyLineHeight/writingStyle(d).bodyFontSize:1.5);input.style.color=writingStyle(d).ink;
   input.style.paddingTop=inlineEdit.field==='note'?`${27*scale}px`:'0px';
 }
-function finishInlineEdit(){if(!inlineEdit)return;inlineEdit=undefined;commandRange=undefined;$('#page-editor-shell').hidden=true;$('.book-viewport').classList.remove('is-writing');$('#inline-done').hidden=true;$('#inline-status').textContent='直接在书页上写';fill();refresh();}
+function finishInlineEdit(rebuild=true){if(!inlineEdit)return;inlineEdit=undefined;commandRange=undefined;$('#page-editor-shell').hidden=true;$('.book-viewport').classList.remove('is-writing');$('#inline-done').hidden=true;$('#inline-status').textContent='直接在书页上写';fill();refresh(false,rebuild);void persist().catch(error=>toast(`保存失败：${(error as Error).message}。请备份日记。`));}
 function beginInlineEdit(field:WritingField|'mood'){
   if(busy)return;if(field==='mood'){finishInlineEdit();openKeyboard('mood');return;}
   if(inlineEdit?.field===field){$('#page-editor').focus();return;}
@@ -337,9 +358,14 @@ $('#page-editor').oninput=e=>{
 };
 $('#page-editor').addEventListener('compositionend',()=>applyInlineValue());
 $('#page-editor').onkeydown=e=>{if(e.isComposing)return;if(e.key==='Escape'||((e.ctrlKey||e.metaKey)&&e.key==='Enter')){e.preventDefault();finishInlineEdit();}if((e.ctrlKey||e.metaKey)&&e.key===';'){e.preventDefault();openKeyboard('stickers');}};
-$('#inline-done').onclick=finishInlineEdit;
+$('#inline-done').onclick=()=>finishInlineEdit();
 new ResizeObserver(()=>positionPageEditor()).observe(canvas);
-document.addEventListener('pointerdown',e=>{if(inlineEdit&&!(e.target as HTMLElement).closest('.book-viewport,.page-writing-tools,.sticker-keyboard'))finishInlineEdit();},true);
+document.addEventListener('pointerdown',e=>{
+  if(!inlineEdit||!(e.target instanceof Element))return;
+  if(e.target.closest('#page-editor-shell,.page-writing-tools,.sticker-keyboard,[data-field]'))return;
+  // Keep the clicked node alive until its click handler has run (video/upload/toolbar).
+  finishInlineEdit(false);
+},true);
 
 const emojiGroups:Record<string,string[]>={
   '心情':['🥰','🥹','😆','😊','😍','😘','🤗','🥺','😭','😤','😴','🫠','🫶','💪','✌️','🙌','🧡','💛','💚','💙','💜','🩷','🤍','💖','✨','💫','⭐','🌈'],
@@ -402,7 +428,7 @@ function hotspotStyle(r:{x:number;y:number;w:number;h:number;rotation?:number},W
 function buildHotspots(){
   const host=$('#page-hotspots');host.querySelectorAll('video').forEach(v=>v.pause());
   const d=displayDiary(),[W,H]=dimensions(d);
-  host.innerHTML=editRegions(d).map(r=>`<button class="field-hotspot" data-field="${r.kind}" style="${hotspotStyle(r,W,H)}" aria-label="点击修改${fieldNames[r.kind]}"><span>${icon('pen')} 修改${fieldNames[r.kind]}</span></button>`).join('')+
+  host.innerHTML=editRegions(d).map(r=>`<button class="field-hotspot ${r.kind===inlineEdit?.field?'active-field':''}" data-field="${r.kind}" style="${hotspotStyle(r,W,H)}" aria-label="点击修改${fieldNames[r.kind]}"><span>${icon('pen')} 修改${fieldNames[r.kind]}</span></button>`).join('')+
     mediaRects(d).map((r,slot)=>{
       const m=mediaForSlot(d,page,slot,media),label=`第 ${slot+1} 个照片或视频位置`;
       return m?.asset.type==='video'?`<div class="inline-video" style="${hotspotStyle(r,W,H)}"><video src="${esc(m.url)}" controls playsinline preload="metadata" aria-label="播放${label}" style="object-fit:${d.fit}"></video><button class="video-start" data-play-slot="${slot}" aria-label="播放第 ${slot+1} 个视频">${icon('play')}<span>点击播放</span></button><button class="replace-media" data-slot="${slot}" aria-label="更换${label}">${icon('image')}<span>更换</span></button></div>`:
@@ -465,17 +491,25 @@ function renderMoods(){const current=getMoodSticker(diary.mood);$('#mood-picker'
 $('#mood-picker').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-mood]');if(!b)return;diary.mood=b.dataset.mood!;fill();changed();};
 $('#share-video').onclick=async()=>{
   if(!resultBlob)return;const file=new File([resultBlob],resultName,{type:resultBlob.type});
-  if(navigator.canShare?.({files:[file]}))try{await navigator.share({files:[file],title:diary.title||'今日成册'});}catch(e){if((e as Error).name!=='AbortError')toast('系统分享未完成，请先保存视频，再到小红书或微信发布');}
+  if(navigator.canShare?.({files:[file]}))try{await navigator.share({files:[file],title:diary.title||'口袋日记'});}catch(e){if((e as Error).name!=='AbortError')toast('系统分享未完成，请先保存视频，再到小红书或微信发布');}
   else {download(resultBlob,resultName);toast('请保存视频，再从小红书或微信相册发布');}
 };
+function completeStartup(restore=false){
+  const previous=restore&&savedView?.id===entryId?savedView:undefined;
+  viewRatio=previous?.ratio;initialized=true;busy=false;$('.workspace').inert=false;$('.topbar').inert=false;
+  $('.workspace').classList.remove('is-loading');$('.workspace').setAttribute('aria-busy','false');$('#startup-state').hidden=true;
+  fill();setMode(previous?.reading??true);page=Math.min(previous?.page??0,pages.length-1);renderStickerLibrary();refresh(true);
+}
+$('#startup-retry').onclick=()=>location.reload();
+$('#startup-import').onclick=()=>$<HTMLInputElement>('#project-input').click();
 async function boot(){
-  busy=true;$('.workspace').inert=true;$('.topbar').inert=true;
-  try{await Promise.all([prepareCatalog(),prepareNotebookAssets()]);const stored=await loadEntries();entries=stored.entries;
-    const current=entries.find(e=>e.id===stored.active)??entries[0];
+  busy=true;$('.workspace').inert=true;$('.topbar').inert=true;$('#save-state').textContent='正在打开…';
+  try{const [,,stored]=await Promise.all([prepareCatalog(),prepareNotebookAssets(),loadEntries()]);entries=stored.entries;
+    const current=entries.find(e=>e.id===savedView?.id)??entries.find(e=>e.id===stored.active)??entries[0];
     if(current){entryId=current.id;diary=structuredClone(current.diary);await attach(current.assets.map(a=>({...a})));$('#save-state').textContent=`已收藏 ${entries.length} 篇日记`;}
     else{await attach(sampleAssets());entries=[{id:entryId,diary:structuredClone(diary),assets,updatedAt:Date.now()}];await saveEntry(entries[0]);$('#save-state').textContent='示例日记';}}
-  catch(e){toast(`恢复失败：${(e as Error).message}。可以导入工程包恢复。`);await attach(sampleAssets());}
-  initialized=true;busy=false;$('.workspace').inert=false;$('.topbar').inert=false;fill();setMode(true);renderStickerLibrary();refresh(true);
+  catch(e){busy=false;$('#startup-state').classList.add('failed');$('#startup-title').textContent='日记暂时没有打开';$('#startup-description').textContent=`${(e as Error).message}。请重试，或导入之前的备份。`;$('#startup-actions').hidden=false;$('#save-state').textContent='等待恢复';return;}
+  completeStartup(true);
   if('serviceWorker' in navigator&&import.meta.env.PROD)navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(()=>toast('离线缓存暂不可用，联网状态仍可继续使用'));
 }
 void boot();

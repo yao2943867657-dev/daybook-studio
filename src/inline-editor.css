@@ -1,7 +1,7 @@
 #page-editor-shell{position:absolute;z-index:5;border:1.5px solid #6e9c8c;border-radius:4px;box-shadow:0 0 0 3px #fffaf063;overflow:hidden;background:transparent}
 #page-editor{display:block;resize:none;width:100%;height:100%;border:0;border-radius:0;outline:0;box-shadow:none;background:transparent;padding:0 3px 3px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:#49795f;scrollbar-width:thin;scrollbar-color:#98af9b transparent}
 #page-editor::placeholder{color:#869c8b}#page-editor::selection{background:#cde4d5}
-.book-viewport.is-writing .field-hotspot{visibility:hidden}
+.book-viewport.is-writing .field-hotspot.active-field{visibility:hidden}
 .page-writing-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;max-width:1200px;margin:9px auto 5px;color:#7c8b77;font-size:11px}
 .page-writing-tools>div{display:flex;align-items:center;gap:5px}.page-writing-tools .quiet{font-size:12px;background:#fffef9;padding:7px 12px;border:1px solid #dce4d8;min-height:34px;gap:4px;display:inline-flex;align-items:center}.page-writing-tools #inline-done{background:#4c715e;color:white;border-color:#4c715e}
 .sticker-keyboard{position:fixed;z-index:35;right:22px;bottom:20px;width:410px;max-width:calc(100vw - 24px);background:#fffefa;border:1px solid #dedfce;border-radius:16px;box-shadow:0 12px 50px #25342d30;overflow:hidden;padding:12px}

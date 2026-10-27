@@ -1,5 +1,5 @@
 {
-  "id": "./", "name": "今日成册 · Daybook Studio", "short_name": "今日成册",
+  "id": "./", "name": "口袋日记 · Pocket Diary", "short_name": "口袋日记",
   "description": "把照片、视频与今天的日记，做成一本会动的小书。",
   "start_url": "./", "scope": "./", "display": "standalone",
   "background_color": "#f7f8f5", "theme_color": "#456357",

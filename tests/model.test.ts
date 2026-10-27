@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { paginate, wrapText, validateDiary, initialDiary, themes, calendarCells, slotCount, sortEntries, stickerPosition, type Entry } from '../src/model';
-import { mediaRects,mediaForSlot } from '../src/renderer';
+import { mediaRects,mediaForSlot,editRegions } from '../src/renderer';
 import type { LoadedMedia } from '../src/media';
 const measure=(s:string)=>Array.from(s).length*10;
 test('长中文分页不丢字，保留段落顺序',()=>{
@@ -83,4 +83,12 @@ test('素材槽位自动排序排除贴纸，明确空槽不回退，旧页映�
   assert.equal(mediaForSlot(d,0,0,media)?.asset.id,'a');assert.equal(mediaForSlot(d,0,1,media)?.asset.id,'b');assert.equal(mediaForSlot(d,1,0,media)?.asset.id,'c');
   d.pageSlots={'0':['__empty__','d']};assert.equal(mediaForSlot(d,0,0,media),undefined);assert.equal(mediaForSlot(d,0,1,media)?.asset.id,'d');
   d.pageSlots={};d.pageMedia={'0':'c'};assert.equal(mediaForSlot(d,0,0,media)?.asset.id,'c');assert.equal(mediaForSlot(d,0,1,media)?.asset.id,'b');
+});
+
+test('心情区在所有模板画幅和拼贴布局下均与照片留白并远离页底',()=>{
+  for(const theme of themes)for(const ratio of ['landscape','portrait'] as const)for(const layout of ['single','duo','trio','wall'] as const){
+    const d={...initialDiary(),theme:theme.id,ratio,layout},mood=editRegions(d).find(r=>r.kind==='mood')!;
+    assert.ok(mood.y>=Math.max(...mediaRects(d).map(r=>r.y+r.h))+20,`${theme.id} ${ratio} ${layout}`);
+    assert.ok(mood.y+mood.h<=(ratio==='portrait'?1600:900)-120);
+  }
 });
