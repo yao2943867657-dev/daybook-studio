@@ -42,7 +42,7 @@ test('保存事务被中断会拒绝，不写入半份记录或错误激活指�
 });
 
 test('旧单篇 ZIP 兼容，并保留自定义贴纸与排版',async()=>{
-  const d=initialDiary();d.stickers=[{id:'placed',kind:'asset:sticker',page:0,x:.42,y:.6,size:60,rotation:.1}];d.layout='duo';d.pageSlots={'0':['photo','']};
+  const d=initialDiary();d.stickers=[{id:'placed',kind:'asset:sticker',page:0,x:.42,y:.6,size:60,rotation:.1,positions:{landscape:{x:.42,y:.6},portrait:{x:.8,y:.79}}}];d.layout='duo';d.pageSlots={'0':['photo','']};
   const sticker={...asset('sticker'),role:'sticker' as const};const packed=await pack(d,[asset(),sticker]);const restored=await unpack(file(packed));
   assert.deepEqual(restored.diary.stickers,d.stickers);assert.equal(restored.diary.layout,'duo');assert.deepEqual(restored.diary.pageSlots,d.pageSlots);
   assert.equal(restored.assets[1].role,'sticker');assert.equal(await restored.assets[1].blob.text(),'original picture bytes');

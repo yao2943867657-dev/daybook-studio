@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { paginate, wrapText, validateDiary, initialDiary, themes, calendarCells, slotCount, sortEntries, type Entry } from '../src/model';
+import { paginate, wrapText, validateDiary, initialDiary, themes, calendarCells, slotCount, sortEntries, stickerPosition, type Entry } from '../src/model';
 import { mediaRects,mediaForSlot } from '../src/renderer';
 import type { LoadedMedia } from '../src/media';
 const measure=(s:string)=>Array.from(s).length*10;
@@ -18,6 +18,13 @@ test('句尾标点不单独挤到下一行',()=>{
 test('空日记仍有一页，emoji 不拆成代理字符',()=>{
   assert.equal(paginate('',100,7,measure).length,1);
   assert.deepEqual(wrapText('🌷🌷🌷',10,measure),['🌷','🌷','🌷']);
+});
+
+test('横竖屏贴纸位置独立保存，旧贴纸兼容，异常坐标被清理',()=>{
+  const base={id:'one',kind:'chat-hug',page:0,x:.4,y:.7,size:76,rotation:0};
+  const d=validateDiary({...initialDiary(),stickers:[{...base,positions:{landscape:{x:.45,y:.705},portrait:{x:.8,y:.79}}},base,{...base,id:'bad',positions:{portrait:{x:Infinity,y:.5},landscape:{x:-2,y:4}}}]});
+  assert.deepEqual(stickerPosition(d.stickers[0],'landscape'),{x:.45,y:.705});assert.deepEqual(stickerPosition(d.stickers[0],'portrait'),{x:.8,y:.79});
+  assert.deepEqual(stickerPosition(d.stickers[1],'portrait'),{x:.4,y:.7});assert.deepEqual(d.stickers[2].positions,{landscape:{x:.02,y:.98}});
 });
 test('导入工程校验版本、文字长度、主题及边界',()=>{
   assert.throws(()=>validateDiary({...initialDiary(),version:2}));

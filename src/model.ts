@@ -1,7 +1,13 @@
 export type ThemeId = 'sketch' | 'cream' | 'travel' | 'blue' | 'forest' | 'film' | 'chat' | 'pocket';
 export type Ratio = 'landscape' | 'portrait';
 export type Layout = 'single' | 'duo' | 'trio' | 'wall';
-export interface StickerPlacement { id: string; kind: string; page: number; x: number; y: number; size: number; rotation: number }
+export interface StickerPlacement { id: string; kind: string; page: number; x: number; y: number; size: number; rotation: number; positions?:Partial<Record<Ratio,{x:number;y:number}>> }
+export function stickerPosition(s:StickerPlacement,ratio:Ratio){return s.positions?.[ratio]??{x:s.x,y:s.y};}
+export function validateStickerPositions(input:unknown):StickerPlacement['positions']{
+  if(!input||typeof input!=='object')return undefined;const result:StickerPlacement['positions']={};
+  for(const ratio of ['landscape','portrait'] as const){const p=(input as Record<string,unknown>)[ratio] as {x?:unknown;y?:unknown}|undefined;if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))result[ratio]={x:Math.max(.02,Math.min(.98,p.x as number)),y:Math.max(.02,Math.min(.98,p.y as number))};}
+  return Object.keys(result).length?result:undefined;
+}
 export interface Diary {
   version: 1; title: string; date: string; body: string; note: string; mood: string;
   theme: ThemeId; ratio: Ratio; seconds: number; fit: 'cover' | 'contain';
@@ -13,14 +19,14 @@ export interface Entry { id: string; diary: Diary; assets: Asset[]; updatedAt: n
 export interface Asset { id: string; name: string; type: 'image' | 'video'; blob: Blob; duration?: number; role?: 'sticker' }
 export interface Theme { id: ThemeId; name: string; hint: string; paper: string; accent: string; cover: string; ink: string }
 export const themes: Theme[] = [
-  { id: 'sketch', name: '手绘框框', hint: '把小心情，画在字里', paper: '#fffcf2', accent: '#bc806f', cover: '#5f7263', ink: '#343b32' },
-  { id: 'cream', name: '奶油日常', hint: '软软的纸，慢慢地写', paper: '#fff7df', accent: '#b39b55', cover: '#b8ba8e', ink: '#4d4939' },
-  { id: 'travel', name: '复古旅行', hint: '票根和远方，都收好', paper: '#f1e3c9', accent: '#9b6550', cover: '#785440', ink: '#4c3e32' },
-  { id: 'blue', name: '晴蓝活页', hint: '一小片晴天的拼贴', paper: '#f5f8fa', accent: '#7392ac', cover: '#98afbe', ink: '#3c4e59' },
-  { id: 'forest', name: '森林纸笺', hint: '听一听，叶子里的风', paper: '#f0f1df', accent: '#6f825b', cover: '#52664b', ink: '#35462f' },
-  { id: 'film', name: '电影收藏', hint: '给今天，留一个镜头', paper: '#eceae2', accent: '#847768', cover: '#454b48', ink: '#333c38' },
-  { id: 'chat', name: '私信聊天', hint: '像给自己发一封消息', paper: '#f4f4eb', accent: '#798b80', cover: '#8d9e90', ink: '#35463c' },
-  { id: 'pocket', name: '口袋日记', hint: '小小一页，也装得下今天', paper: '#fff8ed', accent: '#b98075', cover: '#bb9c94', ink: '#59453f' },
+  { id: 'sketch', name: '晴野方格', hint: '绿布书壳，阳光和方格纸', paper: '#fffcf2', accent: '#bc806f', cover: '#5f7263', ink: '#343b32' },
+  { id: 'cream', name: '奶油烘焙', hint: '蕾丝、黄油色和一块小饼干', paper: '#fff7df', accent: '#b39b55', cover: '#b8ba8e', ink: '#4d4939' },
+  { id: 'travel', name: '旅途票根', hint: '皮革、地图与路上的记忆', paper: '#f1e3c9', accent: '#9b6550', cover: '#785440', ink: '#4c3e32' },
+  { id: 'blue', name: '蓝格透明', hint: '透明封套里的一小片晴天', paper: '#f5f8fa', accent: '#7392ac', cover: '#98afbe', ink: '#3c4e59' },
+  { id: 'forest', name: '森系标本', hint: '粗纤维撕纸，收藏一片叶子', paper: '#f0f1df', accent: '#6f825b', cover: '#52664b', ink: '#35462f' },
+  { id: 'film', name: '深夜胶片', hint: '炭灰相册，给生活留一帧', paper: '#eceae2', accent: '#847768', cover: '#454b48', ink: '#333c38' },
+  { id: 'chat', name: '透明六环', hint: '银色装订环和彩色分隔页', paper: '#f4f4eb', accent: '#798b80', cover: '#8d9e90', ink: '#35463c' },
+  { id: 'pocket', name: '樱粉线圈', hint: '蝴蝶结和随身的小心事', paper: '#fff8ed', accent: '#b98075', cover: '#bb9c94', ink: '#59453f' },
 ];
 export const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 export const initialDiary = (): Diary => ({
@@ -67,7 +73,7 @@ export function validateDiary(input: unknown): Diary {
     originalAudio: d.originalAudio === true, pageMedia,
     layout: ['single','duo','trio','wall'].includes(String(d.layout))?d.layout as Layout:'single',
     pageSlots: d.pageSlots&&typeof d.pageSlots==='object'?Object.fromEntries(Object.entries(d.pageSlots).filter(([k,v])=>/^\d+$/.test(k)&&Number(k)<500&&Array.isArray(v)).map(([k,v])=>[k,(v as unknown[]).slice(0,4).map(id=>typeof id==='string'?id:'')])):{},
-    stickers: Array.isArray(d.stickers)?d.stickers.slice(0,100).filter((s:any)=>s&&typeof s.id==='string'&&typeof s.kind==='string'&&Number.isFinite(s.x)&&Number.isFinite(s.y)).map((s:any)=>({id:s.id.slice(0,80),kind:s.kind.slice(0,80),page:Number.isFinite(Number(s.page))?Math.max(0,Math.min(499,Math.floor(Number(s.page)||0))):0,x:Math.max(.02,Math.min(.98,s.x)),y:Math.max(.02,Math.min(.98,s.y)),size:Math.max(24,Math.min(150,Number(s.size)||70)),rotation:Math.max(-.6,Math.min(.6,Number(s.rotation)||0))})):[] };
+    stickers: Array.isArray(d.stickers)?d.stickers.slice(0,100).filter((s:any)=>s&&typeof s.id==='string'&&typeof s.kind==='string'&&Number.isFinite(s.x)&&Number.isFinite(s.y)).map((s:any)=>({id:s.id.slice(0,80),kind:s.kind.slice(0,80),...(validateStickerPositions(s.positions)?{positions:validateStickerPositions(s.positions)}:{}),page:Number.isFinite(Number(s.page))?Math.max(0,Math.min(499,Math.floor(Number(s.page)||0))):0,x:Math.max(.02,Math.min(.98,s.x)),y:Math.max(.02,Math.min(.98,s.y)),size:Math.max(24,Math.min(150,Number(s.size)||70)),rotation:Math.max(-.6,Math.min(.6,Number(s.rotation)||0))})):[] };
 }
 export const slotCount=(layout:Layout)=>({single:1,duo:2,trio:3,wall:4}[layout]);
 export function sortEntries(entries: Entry[]): Entry[] { return [...entries].sort((a,b)=>b.diary.date.localeCompare(a.diary.date)||b.updatedAt-a.updatedAt); }

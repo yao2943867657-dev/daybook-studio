@@ -1,7 +1,7 @@
 /** Original, redistributable hand-drawn sticker artwork. MIT, Daybook Studio contributors. */
 export interface CatalogSticker { id: string; name: string; category: string; tags: string[]; svg: string }
-const ink = '#625347';
-const palette = { rose:'#e9b4ad', blue:'#b5d1dc', green:'#a5bc92', yellow:'#efd38c', cream:'#fff2cf', lilac:'#c9b7d8' };
+const ink = '#52494c';
+const palette = { rose:'#f3a6ba', blue:'#a7d8ed', green:'#acd5aa', yellow:'#ffe18c', cream:'#fff3cf', lilac:'#d6b9ef' };
 const p = (d:string,fill='none',extra='') => `<path d="${d}" fill="${fill}" ${extra}/>`;
 const ellipse = (cx:number,cy:number,rx:number,ry:number,fill:string,extra='') => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" ${extra}/>`;
 const circle = (x:number,y:number,r:number,fill:string) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`;
@@ -19,6 +19,58 @@ function face(kind:string,animal:'girl'|'cat'|'rabbit'='girl'):string {
   if(animal==='rabbit')return `${ellipse(33,26,9,24,'#fff8ee','transform="rotate(-10 33 26)"')}${ellipse(66,26,9,24,'#fff8ee','transform="rotate(10 66 26)"')}${ellipse(33,24,3,14,palette.rose,'stroke="none"')}${ellipse(66,24,3,14,palette.rose,'stroke="none"')}${ellipse(50,57,33,29,'#fff8ee')}${expression(kind)}`;
   return `${p('M18 52Q8 23 29 15 40 4 56 13 80 13 84 34L82 70 68 75 28 74 16 66Z','#876952')}${ellipse(50,48,30,32,'#fae5cf')}${p('M20 42Q23 13 50 19 76 18 79 39 55 39 51 23 44 40 20 42Z','#876952')}${p('M26 77q24-12 47 0l3 13H21Z',palette.blue)}${expression(kind)}`;
 }
+
+type Animal='cat'|'bunny'|'puppy'|'rice'|'bear';
+/** Original five-character cast. Shapes, colours and poses are drawn here, never traced from IP art. */
+function reactionArt(animal:Animal,emotion:string,pose='wave',caption=''):string {
+  const fur={cat:'#ffddba',bunny:'#fff9fc',puppy:'#e6c8ad',rice:'#fffef7',bear:'#bba7dd'}[animal];
+  const lower=caption?70:83;
+  const body=animal==='rice'?p(`M23 56Q18 42 32 30 46 9 58 29 81 37 78 58L76 ${lower-5}Q53 ${lower+8} 25 ${lower-3}Z`,fur):`${ellipse(50,lower-13,22,19,fur)}${ellipse(40,lower,10,5,fur)}${ellipse(63,lower,10,5,fur)}`;
+  const head=animal==='cat'?`${p('M22 40 20 14 37 25Q50 20 65 25L80 13 79 42Q84 65 51 66 17 65 22 40Z',fur)}${p('m24 18 4 17 8-8m39-9-4 17-8-8','#f8a8bd','stroke-width="1"')}${p('m46 24-1 7m8-7 1 7','#eebf91','stroke-width="2.4"')}`:animal==='bunny'?`${p('M28 31Q13 1 26 3 38 5 40 26m21 0Q61-1 73 3 84 9 71 33',fur)}${p('M28 9q-2 10 6 18m35-18q3 7-4 17','none','stroke="#f7bfd5" stroke-width="4"')}${ellipse(50,43,29,24,fur)}`:animal==='puppy'?`${p('M28 26Q8 14 13 45q3 12 16 4m42-24q21-11 17 18-2 14-16 9','#b58d72')}${p('M23 37Q24 18 48 20 76 17 79 39 84 66 51 67 18 64 23 37Z',fur)}${ellipse(53,51,15,12,'#fff4e5')}`:animal==='bear'?`${circle(27,25,11,fur)}${circle(73,25,11,fur)}${circle(27,25,5,'#dac8ed')}${circle(73,25,5,'#dac8ed')}${ellipse(50,43,30,25,fur)}${ellipse(50,51,14,10,'#efe5f7')}`:'';
+  const eyes=emotion==='joy'||emotion==='cheer'?p('M33 42q5-8 10 0m14 0q5-8 10 0','none','stroke-width="2.6"'):emotion==='sad'?`${ellipse(38,43,3.4,4.4,ink)}${ellipse(62,43,3.4,4.4,ink)}${p('M34 36q5-3 10 0m12 0q5-3 10 0')}${ellipse(32,55,4,7,'#8ed3f2','stroke="none"')}${ellipse(69,55,4,7,'#8ed3f2','stroke="none"')}`:emotion==='tired'||emotion==='calm'?p('m33 44 9 1m16 0 9-1','none','stroke-width="2.5"'):emotion==='angry'?`${p('m32 35 11 5m14 0 11-5','none','stroke-width="2.5"')}${circle(38,44,2.5,ink)}${circle(62,44,2.5,ink)}`:emotion==='surprise'?`${ellipse(38,42,4,5.2,ink)}${ellipse(62,42,4,5.2,ink)}${circle(39,40,1.2,'#fff')}${circle(63,40,1.2,'#fff')}`:emotion==='love'?`${heart(38,42,.28,'#e988ac')}${heart(62,42,.28,'#e988ac')}`: `${ellipse(38,42,2.8,3.5,ink)}${ellipse(62,42,2.8,3.5,ink)}${circle(39,41,1,'white')}${circle(63,41,1,'white')}`;
+  const mouth=emotion==='joy'||emotion==='cheer'?`${p('M43 51q7 15 14 0Z','#df8da2')}${p('M47 57q4-2 7 0','none','stroke="#f9b6bd" stroke-width="2"')}`:emotion==='surprise'?ellipse(50,54,4,5,'#d993a8'):emotion==='sad'?p('M45 55q5-5 10 0'):emotion==='angry'?p('M44 56q6-6 12 0'):emotion==='tired'?p('M46 54h8'):p('M43 52q3 7 7 1 4 6 8-1');
+  const cheeks=`${ellipse(28,51,5.5,3,'#f3a9ba','stroke="none" opacity=".65"')}${ellipse(72,51,5.5,3,'#f3a9ba','stroke="none" opacity=".65"')}`;
+  const whiskers=animal==='cat'?p('m26 48-8-2m8 7-8 1m56-6 8-2m-8 7 8 1','none','stroke-width="1.1"'):'';
+  const arm=pose==='hug'?`${p('M29 61q22-10 27 4m16-4q-22-10-27 4','none','stroke-width="9" stroke="'+fur+'"')}${p('M30 59q10-4 18 3m22-3q-9-4-17 3')}`:pose==='heart'?`${heart(50,66,.68,'#f7a4c1')}${ellipse(32,64,7,5,fur,'transform="rotate(-25 32 64)"')}${ellipse(69,64,7,5,fur,'transform="rotate(25 69 64)"')}`:pose==='sleep'?`${p('M25 67q25 8 52-1v12H23Z','#bcdff0')}${p('m79 15 9 1-9 9h9m-4-19 7 1-7 7h7','none','stroke="#9ba0c8" stroke-width="1.6"')}`:pose==='cup'?`${p('M37 58h28l-3 20H40Z','#a7d8ed')}${p('M65 62q15-1 9 9-2 3-10 2M45 54q-4-5 1-9m9 9q-4-5 1-9')}${ellipse(30,65,8,5,fur)}${ellipse(72,65,7,5,fur)}`:pose==='food'?`${p('M31 62h40l-7 15H38Z','#f5b7c9')}${ellipse(51,61,20,5,'#fff4da')}${p('m38 57 5-5 5 4 6-5 9 7','#fcf8e6','stroke="none"')}${p('m74 56 8-18m-4 20 9-18','none','stroke-width="2"')}`:pose==='flower'?`${p('M77 62v18','none','stroke="#7cae8a" stroke-width="2.5"')}${[0,72,144,216,288].map(a=>`<ellipse cx="77" cy="48" rx="5" ry="9" transform="rotate(${a} 77 55)" fill="#ffc7dd"/>`).join('')}${circle(77,55,4,'#ffdf70')}${p('M27 61q-10 7-10 0',fur)}${ellipse(72,70,9,5,fur)}`:pose==='run'?`${p('M26 57 15 50m59 8 12-9','none','stroke="'+fur+'" stroke-width="10"')}${p('M12 63h-7m9 8H8m72 0 12 3')}`:pose==='sparkle'?`${star(16,24,.38,'#ffdf70')}${star(84,35,.34,'#a7d8ed')}${p('m24 60-8-7m57 7 8-7','none','stroke="'+fur+'" stroke-width="10"')}`:`${p('M26 58Q8 63 16 48m60 12q16 7 13-7','none','stroke="'+fur+'" stroke-width="9"')}${p('m11 40-5-3m10 0-1-6')}`;
+  const extra=emotion==='angry'?p('M79 17v7m-4-3h8','none','stroke="#e990b0" stroke-width="2.2"'):emotion==='love'?heart(84,23,.28,'#f3a6ba'):emotion==='cheer'?`${star(16,25,.3,'#ffdb6b')}${star(85,21,.25,'#ffdb6b')}`:emotion==='surprise'?p('M81 17v10m0 5v1','none','stroke="#c6a4e5" stroke-width="3"'):'';
+  const label=caption?`<text x="50" y="94" text-anchor="middle" font-size="${caption.length>3?12:14}" font-weight="750" font-family="'Microsoft YaHei','PingFang SC',sans-serif" fill="#655066" stroke="#fff" stroke-width="3.8" paint-order="stroke">${caption}</text>`:'';
+  return `<g stroke-width="1.8">${body}${head}${eyes}${cheeks}${mouth}${whiskers}${arm}${extra}</g>${label}`;
+}
+
+const chatReactions:[string,string,Animal,string,string,string[]][]=[
+  ['chat-yay','好耶','cat','joy','sparkle',['开心','好耶','撒花','yes','happy']],
+  ['chat-ok','收到','puppy','content','wave',['收到','好滴','好的','ok','收到啦']],
+  ['chat-love','贴贴','bunny','love','heart',['贴贴','喜欢','亲亲','爱你','love']],
+  ['chat-hug','抱抱','bear','content','hug',['抱抱','安慰','拥抱','hug']],
+  ['chat-lazy','摆烂','rice','calm','sleep',['摆烂','躺平','休息','摸鱼','lazy']],
+  ['chat-sad','委屈','bunny','sad','hug',['委屈','哭哭','难过','sad']],
+  ['chat-night','晚安','cat','tired','sleep',['晚安','困困','睡觉','night']],
+  ['chat-morning','早安','puppy','joy','cup',['早安','早上好','咖啡','morning']],
+  ['chat-thanks','谢谢','bear','joy','flower',['谢谢','感谢','thanks']],
+  ['chat-heart','爱你','rice','love','heart',['爱你','喜欢','比心','love']],
+  ['chat-cheer','加油','bunny','cheer','sparkle',['加油','鼓励','打气','cheer']],
+  ['chat-tired','累了','puppy','tired','sleep',['累了','疲惫','下班','tired']],
+  ['chat-speechless','无语','cat','calm','hug',['无语','沉默','呆住','speechless']],
+  ['chat-wow','震惊','rice','surprise','wave',['震惊','惊讶','哇','wow']],
+  ['chat-angry','不气','bear','angry','cup',['生气','不气','奶凶','angry']],
+  ['chat-miss','想你','bunny','love','flower',['想你','想念','心动','miss']],
+  ['chat-confetti','撒花','puppy','cheer','sparkle',['撒花','庆祝','开心','party']],
+  ['chat-water','喝水','rice','content','cup',['喝水','休息','健康','water']],
+  ['chat-food','干饭','cat','joy','food',['干饭','吃饭','好吃','food']],
+  ['chat-idle','摸鱼','bear','calm','cup',['摸鱼','上班','放空','break']],
+  ['chat-busy','忙碌','bunny','surprise','run',['忙碌','在忙','打工','busy']],
+  ['chat-go','冲鸭','puppy','cheer','run',['冲鸭','出发','努力','go']],
+  ['chat-little-heart','比心','cat','love','heart',['比心','爱心','心心','heart']],
+  ['chat-sticker','贴一下','rice','joy','flower',['贴纸','手账','贴一下','sticker']],
+  ['chat-cry','呜呜','puppy','sad','hug',['呜呜','哭哭','难过','cry']],
+  ['chat-fine','好滴','bunny','content','wave',['好滴','好哒','好的','ok']],
+  ['chat-happy','开心','bear','joy','sparkle',['开心','高兴','快乐','happy']],
+  ['chat-can','我可以','rice','cheer','sparkle',['我可以','自信','加油','yes']],
+  ['chat-bye','溜了','cat','content','run',['溜了','再见','拜拜','bye']],
+  ['chat-please','求抱抱','bunny','sad','hug',['求抱抱','安慰','委屈','please']],
+  ['chat-calm','放空','rice','calm','sleep',['放空','平静','自在','calm']],
+  ['chat-birthday','生日快乐','bear','joy','flower',['生日','生日快乐','庆祝','birthday']],
+];
 const definitions: [string,string,string,string[],string][] = [
   ['sun','小太阳','日常',['阳光','晴天','sun','weather'],`${circle(50,51,22,palette.yellow)}${p('M50 14v9m0 57v8M13 50h9m56 0h9M23 23l7 7m41 41 7 7m0-55-7 7M29 71l-7 7')}${p('M41 50h1m16 0h1m-17 9q8 8 16 0')}`],
   ['cloud','云朵','日常',['天气','白云','cloud'],`${p('M22 66C1 64 8 37 27 39 26 12 67 13 70 38 91 29 103 64 77 67Z','#f9f8ef')}${p('M37 51h1m22 0h1m-19 8q6 5 11 0')}${blush()}`],
@@ -85,7 +137,25 @@ function wrap(id:string,art:string):string {
   // White sticker edge and subtle ink misregistration use only local SVG primitives.
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" aria-hidden="true"><defs><filter id="edge-${id}" x="-15%" y="-15%" width="130%" height="130%"><feMorphology in="SourceAlpha" operator="dilate" radius="2" result="edge"/><feFlood flood-color="#fffdf5"/><feComposite in2="edge" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g stroke="${ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#edge-${id})">${art}</g></svg>`;
 }
-export const catalog:CatalogSticker[]=definitions.map(([id,name,category,tags,art])=>({id,name,category,tags,svg:wrap(id,art)}));
+const refreshed:Record<string,string>={
+  'cat-happy':reactionArt('cat','joy','sparkle'), 'cat-love':reactionArt('cat','love','heart'),
+  'cat-sad':reactionArt('cat','sad','hug'), 'cat-angry':reactionArt('cat','angry','wave'), 'cat-sleepy':reactionArt('cat','tired','sleep'),
+  'rabbit-cheer':reactionArt('bunny','cheer','sparkle'), 'rabbit-love':reactionArt('bunny','love','heart'), 'rabbit-calm':reactionArt('bunny','calm','hug'),
+  'mood-happy':reactionArt('cat','joy','sparkle'), 'mood-content':reactionArt('rice','content','flower'),
+  'mood-cheer':reactionArt('bunny','cheer','run'), 'mood-calm':reactionArt('bear','calm','cup'),
+  'mood-tired':reactionArt('puppy','tired','sleep'), 'mood-sad':reactionArt('bunny','sad','hug'),
+  'mood-angry':reactionArt('cat','angry','wave'), 'mood-miss':reactionArt('bear','love','heart'),
+};
+export const catalog:CatalogSticker[]=[
+  ...definitions.map(([id,name,category,tags,art])=>({id,name,category,tags,svg:wrap(id,refreshed[id]??art)})),
+  ...chatReactions.map(([id,name,animal,emotion,pose,tags])=>({id,name,category:'聊天',tags:[...tags,'聊天','表情包','软萌',animal],svg:wrap(id,reactionArt(animal,emotion,pose,name))})),
+];
+/** Curated original packs; popularity research informs the emotional language, not an IP licence. */
+export const stickerPacks=[
+  {id:'chat',name:'软糯聊天',description:'好耶、抱抱、摆烂，给今天加一点表情。',ids:chatReactions.map(r=>r[0])},
+  {id:'mood',name:'今日心情',description:'八种心情，用不同的小动物表达。',ids:Object.keys(refreshed).filter(id=>id.startsWith('mood-'))},
+  {id:'scrapbook',name:'手账小物',description:'胶带、花草、咖啡和随手收藏的小东西。',ids:definitions.filter(d=>!['表情','心情'].includes(d[2])).map(d=>d[0])},
+];
 const lookup=new Map(catalog.map(s=>[s.id,s]));
 export const getSticker=(id:string)=>lookup.get(id);
 export const moods:{name:string;sticker:string}[]=[

@@ -1,33 +1,38 @@
-import { paginate, themes, wrapText, type Diary, type TextLine, type Theme } from './model';
+import { paginate, themes, wrapText, stickerPosition, type Diary, type TextLine, type Theme } from './model';
 import { drawSticker, getMoodSticker } from './catalog';
 import type { LoadedMedia } from './media';
+import { notebookAsset } from './book-assets';
+export { prepareNotebookAssets } from './book-assets';
 
 type Ctx=CanvasRenderingContext2D;
 export interface MediaRect { x:number; y:number; w:number; h:number; rotation?:number }
 export interface EditRegion extends MediaRect { kind:'title'|'body'|'note'|'mood' }
+export type EditingField=EditRegion['kind'];
 const hand='"KaiTi", "STKaiti", "Kaiti SC", "FangSong", serif';
 const sans='"PingFang SC", "Microsoft YaHei", sans-serif';
 export const dimensions=(d:Diary)=>d.ratio==='portrait'?[900,1600]:[1600,900];
 interface Geometry { title:MediaRect; body:MediaRect&{size:number;step:number;lines:number}; note:MediaRect; mood:MediaRect; media:MediaRect }
 function geometry(d:Diary):Geometry {
   if(d.ratio==='portrait') {
-    const media={x:100,y:260,w:700,h:425};
+    const media={x:146,y:270,w:634,h:420};
     if(d.theme==='film')Object.assign(media,{x:95,y:290,w:710,h:360});
     if(d.theme==='forest')Object.assign(media,{x:142,y:247,w:616,h:438});
-    return {title:{x:95,y:107,w:705,h:117},body:{x:111,y:806,w:665,h:424,size:34,step:53,lines:8},note:{x:103,y:1300,w:680,h:147},mood:{x:108,y:726,w:665,h:58},media};
+    const left=d.theme==='forest'?228:d.theme==='blue'?195:145;
+    return {title:{x:left,y:105,w:780-left,h:125},body:{x:left,y:808,w:780-left,h:416,size:34,step:52,lines:8},note:{x:left,y:1310,w:780-left,h:126},mood:{x:left,y:735,w:780-left,h:55},media:{...media,x:left,w:780-left}};
   }
-  const common:Geometry={title:{x:124,y:108,w:606,h:110},body:{x:145,y:281,w:535,h:307,size:30,step:44,lines:7},note:{x:126,y:663,w:345,h:101},mood:{x:535,y:658,w:182,h:111},media:{x:889,y:157,w:594,h:560}};
+  const common:Geometry={title:{x:169,y:127,w:539,h:118},body:{x:185,y:292,w:518,h:311,size:32,step:44,lines:7},note:{x:183,y:669,w:505,h:100},mood:{x:956,y:748,w:448,h:55},media:{x:920,y:176,w:514,h:525}};
   switch(d.theme){
-    case 'cream':return {...common,title:{x:152,y:132,w:540,h:102},body:{x:154,y:287,w:520,h:306,size:30,step:43,lines:7},note:{x:147,y:674,w:393,h:92},mood:{x:580,y:666,w:131,h:103},media:{x:957,y:198,w:466,h:444}};
-    case 'travel':return {...common,title:{x:152,y:126,w:545,h:113},body:{x:156,y:304,w:516,h:294,size:29,step:42,lines:7},note:{x:159,y:683,w:482,h:91},mood:{x:948,y:738,w:420,h:54},media:{x:938,y:172,w:500,h:459}};
-    case 'blue':return {...common,title:{x:184,y:112,w:527,h:117},body:{x:238,y:283,w:450,h:306,size:30,step:44,lines:7},note:{x:372,y:667,w:320,h:111},mood:{x:905,y:745,w:522,h:55},media:{x:908,y:158,w:562,h:549}};
-    case 'forest':return {...common,title:{x:176,y:116,w:510,h:122},body:{x:203,y:302,w:469,h:297,size:29,step:42,lines:7},note:{x:191,y:671,w:443,h:105},mood:{x:971,y:736,w:394,h:55},media:{x:968,y:227,w:445,h:441}};
-    case 'film':return {...common,title:{x:128,y:137,w:565,h:107},body:{x:141,y:303,w:536,h:294,size:29,step:42,lines:7},note:{x:150,y:680,w:510,h:99},mood:{x:935,y:734,w:442,h:57},media:{x:895,y:252,w:570,h:330}};
-    case 'chat':return {...common,title:{x:148,y:133,w:532,h:109},body:{x:200,y:292,w:481,h:299,size:29,step:43,lines:7},note:{x:163,y:683,w:485,h:90},mood:{x:947,y:742,w:433,h:53},media:{x:912,y:163,w:555,h:540}};
-    case 'pocket':return {...common,title:{x:153,y:128,w:538,h:103},body:{x:151,y:307,w:524,h:294,size:30,step:42,lines:7},note:{x:164,y:691,w:474,h:80},mood:{x:939,y:742,w:435,h:55},media:{x:921,y:179,w:535,h:516}};
+    case 'cream':return {...common,title:{x:183,y:145,w:520,h:108},body:{x:187,y:305,w:515,h:304,size:32,step:43,lines:7},media:{x:960,y:206,w:466,h:445}};
+    case 'travel':return {...common,title:{x:247,y:137,w:460,h:117},body:{x:247,y:309,w:455,h:304,size:31,step:43,lines:7},note:{x:247,y:679,w:455,h:97},media:{x:903,y:184,w:435,h:494}};
+    case 'blue':return {...common,title:{x:230,y:143,w:480,h:115},body:{x:229,y:308,w:475,h:309,size:31,step:44,lines:7},note:{x:230,y:677,w:470,h:98},media:{x:930,y:174,w:483,h:529}};
+    case 'forest':return {...common,title:{x:251,y:139,w:453,h:114},body:{x:255,y:308,w:448,h:309,size:31,step:44,lines:7},note:{x:253,y:677,w:450,h:97},media:{x:912,y:190,w:490,h:494}};
+    case 'film':return {...common,title:{x:162,y:137,w:548,h:111},body:{x:180,y:302,w:524,h:306,size:31,step:43,lines:7},media:{x:903,y:250,w:542,h:335}};
+    case 'chat':return {...common,title:{x:182,y:133,w:523,h:109},body:{x:182,y:299,w:520,h:309,size:32,step:44,lines:7},media:{x:928,y:162,w:507,h:540}};
+    case 'pocket':return {...common,title:{x:169,y:128,w:538,h:113},body:{x:182,y:307,w:518,h:304,size:32,step:43,lines:7},media:{x:925,y:188,w:506,h:500}};
     default:return common;
   }
 }
+export function writingStyle(d:Diary){const g=geometry(d),t=themes.find(t=>t.id===d.theme)??themes[0];return {fontFamily:hand,bodyFontSize:g.body.size,bodyLineHeight:g.body.step,ink:t.ink};}
 export function editRegions(d:Diary):EditRegion[]{const g=geometry(d);return (['title','body','note','mood'] as const).map(kind=>({kind,...g[kind]}));}
 export function mediaRects(d:Diary):MediaRect[]{
   const b=geometry(d).media,gap=d.ratio==='portrait'?22:25,layout=d.layout??'single';
@@ -97,6 +102,19 @@ function paperTexture(c:Ctx,x:number,y:number,w:number,h:number,color:string,gri
 }
 function book(c:Ctx,d:Diary,t:Theme){
   const [W,H]=dimensions(d),portrait=d.ratio==='portrait',x=portrait?37:43,y=35,w=W-2*x,h=H-80;
+  const plate=notebookAsset(d.theme);
+  if(plate){
+    if(!portrait)c.drawImage(plate,0,0,W,H);
+    else {
+      // A single physical page on phones. Corner material proportions stay fixed;
+      // only the empty paper middle extends to suit a tall reading page.
+      const sw=plate.naturalWidth*.5,sh=plate.naturalHeight,sx=0,cap=sh*.16,dh=205;
+      c.drawImage(plate,sx,0,sw,cap,0,0,W,dh);
+      c.drawImage(plate,sx,cap,sw,sh-2*cap,0,dh,W,H-2*dh);
+      c.drawImage(plate,sx,sh-cap,sw,cap,0,H-dh,W,dh);
+    }
+    return;
+  }
   const bg:Record<string,string>={sketch:'#9a8068',cream:'#e5d6c3',travel:'#876a50',blue:'#d6dedb',forest:'#b9bda3',film:'#777b78',chat:'#c9ccc4',pocket:'#bdb3a5'};
   box(c,0,0,W,H,bg[t.id]);c.globalAlpha=.08;for(let i=0;i<35;i++)line(c,0,i*H/35,W,i*H/35+Math.sin(i)*15,'#44382a',i%3?1:3);c.globalAlpha=1;
   c.save();c.shadowColor='#29241465';c.shadowBlur=25;c.shadowOffsetY=13;box(c,x-10,y-9,w+20,h+20,t.id==='blue'?'#edf3e4b5':t.cover,17);c.restore();
@@ -108,7 +126,40 @@ function book(c:Ctx,d:Diary,t:Theme){
     else {line(c,800,46,800,827,'#a9a08d5c',.7);box(c,797,819,11,55,t.id==='travel'?'#a66d50':'#8c9c7f');}
   }else if(t.id==='pocket')for(let xx=110;xx<820;xx+=65){c.strokeStyle='#847760';c.lineWidth=4;c.beginPath();c.ellipse(xx,47,9,21,0,0,Math.PI*2);c.stroke();}
 }
+function materialDecorations(c:Ctx,d:Diary,t:Theme,g:Geometry){
+  const portrait=d.ratio==='portrait';
+  txt(c,d.date.replaceAll('-',' / '),g.title.x,g.title.y-22,17,t.accent,sans);
+  if(!d.decoration)return;
+  const titleBottom=g.title.y+g.title.h-6;
+  if(d.theme==='sketch'){
+    c.save();c.globalAlpha=.36;line(c,g.title.x+6,titleBottom,g.title.x+g.title.w*.88,titleBottom-8,'#d3b84d',13);c.restore();
+    if(d.decoration===2)drawSticker(c,'book',g.note.x+g.note.w-8,g.note.y+g.note.h+26,62,-.1);
+  }else if(d.theme==='blue'){
+    c.save();c.globalAlpha=.27;line(c,g.title.x,titleBottom,g.title.x+g.title.w*.94,titleBottom-6,'#8aa9c0',11);c.restore();
+    torn(c,g.note.x-13,g.note.y-17,g.note.w+24,g.note.h+23,'#f1d5c7d9',-.015);
+  }else if(d.theme==='forest'){
+    c.save();c.globalAlpha=.35;line(c,g.title.x,titleBottom,g.title.x+g.title.w*.91,titleBottom-5,'#a4b082',8);c.restore();
+    torn(c,g.note.x-14,g.note.y-16,g.note.w+25,g.note.h+22,'#d6dbc6bb',-.017);
+  }else if(d.theme==='cream'){
+    torn(c,g.note.x-12,g.note.y-15,g.note.w+24,g.note.h+28,'#f7e6c8b5',.012);
+    if(d.decoration===2)drawSticker(c,'croissant',portrait?748:715,g.note.y+g.note.h,67,.12);
+  }else if(d.theme==='travel'){
+    c.save();c.setLineDash([3,6]);line(c,g.title.x,titleBottom,g.title.x+g.title.w,titleBottom,'#9f8c6c80');c.restore();
+    torn(c,g.note.x-12,g.note.y-17,g.note.w+24,g.note.h+26,'#e5d6b8bb',-.012);
+  }else if(d.theme==='film'){
+    const m=g.media;box(c,m.x-23,m.y-25,m.w+46,m.h+50,'#302f2c');
+    for(const yy of [m.y-19,m.y+m.h+11])for(let xx=m.x-12;xx<m.x+m.w+10;xx+=27)box(c,xx,yy,14,9,'#eee8da',1);
+    line(c,g.title.x,titleBottom,g.title.x+g.title.w,titleBottom,'#827a6d65',1.3);
+  }else if(d.theme==='chat'){
+    c.save();c.globalAlpha=.48;line(c,g.title.x,titleBottom,g.title.x+g.title.w*.88,titleBottom-6,'#bd9cc2',6);c.restore();
+    if(d.decoration===2){line(c,g.note.x,g.note.y-17,g.note.x+g.note.w,g.note.y-17,'#bfb0c2',.8);}
+  }else if(d.theme==='pocket'){
+    c.save();c.globalAlpha=.35;line(c,g.title.x,titleBottom,g.title.x+g.title.w*.9,titleBottom-7,'#d69ba9',10);c.restore();
+    torn(c,g.note.x-13,g.note.y-16,g.note.w+26,g.note.h+25,'#f0dce1bb',.014);
+  }
+}
 function decorations(c:Ctx,d:Diary,t:Theme,g:Geometry){
+  if(notebookAsset(d.theme)){materialDecorations(c,d,t,g);return;}
   if(!d.decoration){txt(c,d.date.replaceAll('-',' / '),g.title.x,d.ratio==='portrait'?86:79,17,t.accent,sans);return;}
   if(d.ratio==='portrait'){
     if(d.decoration){washi(c,68,83,150,57,t.id==='blue'?'#a3bcd2':'#d6bdb2',-.16,'gingham');stem(c,812,210,.75,'#7d8b71',true);clip(c,85,48,.7);}
@@ -157,26 +208,25 @@ function photo(c:Ctx,m:LoadedMedia|undefined,r:MediaRect,d:Diary,t:Theme,index:n
   const {x,y,w,h}=r,pad=d.theme==='cream'?17:10;shadow(c,()=>box(c,x-pad,y-pad,w+2*pad,h+2*pad+(d.theme==='cream'?25:0),'#fffdf4',1),7);
   c.save();c.beginPath();c.rect(x,y,w,h);c.clip();box(c,x,y,w,h,'#e5e6d6');
   if(m){const e=m.element,video=e instanceof HTMLVideoElement,ew=video?e.videoWidth:e.naturalWidth,eh=video?e.videoHeight:e.naturalHeight;if(ew&&eh){const scale=d.fit==='contain'?Math.min(w/ew,h/eh):Math.max(w/ew,h/eh);c.drawImage(e,x+(w-ew*scale)/2,y+(h-eh*scale)/2,ew*scale,eh*scale);}}
-  else {c.fillStyle='#afba9e';c.beginPath();c.moveTo(x,y+h);c.lineTo(x+w*.38,y+h*.48);c.lineTo(x+w*.62,y+h*.72);c.lineTo(x+w*.84,y+h*.39);c.lineTo(x+w,y+h);c.closePath();c.fill();c.fillStyle='#f4dfab';c.beginPath();c.arc(x+w*.24,y+h*.28,Math.min(w,h)*.085,0,Math.PI*2);c.fill();c.textAlign='center';txt(c,'点这里放照片 / 视频',x+w/2,y+h*.88,Math.min(24,w/12),'#64725d');c.textAlign='left';}
+  else {box(c,x,y,w,h,'#f1eee5');const cx=x+w/2,cy=y+h/2,size=Math.min(w,h)*.1;line(c,cx-size,cy,cx+size,cy,'#bbb7a5',1.7);line(c,cx,cy-size,cx,cy+size,'#bbb7a5',1.7);c.textAlign='center';txt(c,'留给今天的回忆',cx,cy+size+Math.min(30,h*.16),Math.min(21,w/11),'#9d9b89');c.textAlign='left';}
   c.restore();if(d.decoration>0&&index<2)washi(c,x+Math.min(26,w*.1),y-21,Math.min(126,w*.49),30,d.theme==='blue'?'#9db7ca':d.theme==='cream'?'#d5bc9c':t.accent,-.08,index%2?'dot':'gingham');
 }
-function writing(c:Ctx,d:Diary,t:Theme,g:Geometry,content:TextLine[],time:number,animate:boolean){
-  c.font=`${d.ratio==='portrait'?43:37}px ${hand}`;wrapText(d.title||'今天的日记',g.title.w,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.title.x,g.title.y+40+i*43,d.ratio==='portrait'?43:37,t.ink));
+function writing(c:Ctx,d:Diary,t:Theme,g:Geometry,content:TextLine[],time:number,animate:boolean,editingField?:EditingField){
+  if(editingField!=='title'){c.font=`${d.ratio==='portrait'?43:37}px ${hand}`;wrapText(d.title||'今天的日记',g.title.w,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.title.x,g.title.y+40+i*43,d.ratio==='portrait'?43:37,t.ink));}
   const lines=content.length?content:[{text:'给今天，留一点值得收藏的回忆。',paragraph:0,first:true}];c.font=`${g.body.size}px ${hand}`;
   const largest=Math.max(1,...lines.map(l=>c.measureText(l.text).width));
   const short=lines.length<=4&&d.theme!=='chat';
   const bodySize=short?Math.min(d.ratio==='portrait'?46:44,g.body.size*1.42,g.body.size*g.body.w/largest):g.body.size;
   const step=short?Math.min(g.body.step*1.5,g.body.h/lines.length):g.body.step;
   const offset=short?Math.max(0,(g.body.h-(lines.length-1)*step-bodySize)/2):0;
-  lines.forEach((l,i)=>{c.save();c.globalAlpha=animate?Math.max(0,Math.min(1,(time-i*.25)*3)):1;txt(c,l.text,g.body.x,g.body.y+offset+bodySize+i*step,bodySize,t.ink);c.restore();});
-  txt(c,d.theme==='travel'?'路上的小记':d.theme==='film'?'观后感 / 小批注':'我的小批注',g.note.x,g.note.y+11,20,t.accent);c.font=`${d.ratio==='portrait'?26:23}px ${hand}`;wrapText(d.note||'把平凡的一天，认真收好。',g.note.w-5,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.note.x,g.note.y+47+i*31,d.ratio==='portrait'?26:23,t.ink));
-  const mx=g.mood.x,my=g.mood.y;if(g.mood.w>250){drawSticker(c,getMoodSticker(d.mood),mx+25,my+22,57);txt(c,`今日心情  ${d.mood}`,mx+67,my+31,22,t.ink);}else{txt(c,'今日心情',mx,my+6,20,t.accent);drawSticker(c,getMoodSticker(d.mood),mx+28,my+52,61);txt(c,d.mood.slice(0,7),mx+65,my+57,19,t.ink);}
+  if(editingField!=='body')lines.forEach((l,i)=>{c.save();c.globalAlpha=animate?Math.max(0,Math.min(1,(time-i*.25)*3)):1;txt(c,l.text,g.body.x,g.body.y+offset+bodySize+i*step,bodySize,t.ink);c.restore();});
+  if(editingField!=='note'){txt(c,d.theme==='travel'?'路上的小记':d.theme==='film'?'观后感 / 小批注':'我的小批注',g.note.x,g.note.y+11,20,t.accent);c.font=`${d.ratio==='portrait'?26:23}px ${hand}`;wrapText(d.note||'把平凡的一天，认真收好。',g.note.w-5,s=>c.measureText(s).width).slice(0,2).forEach((s,i)=>txt(c,s,g.note.x,g.note.y+47+i*31,d.ratio==='portrait'?26:23,t.ink));}
+  if(editingField!=='mood'){const mx=g.mood.x,my=g.mood.y;if(g.mood.w>250){drawSticker(c,getMoodSticker(d.mood),mx+25,my+22,57);txt(c,`今日心情  ${d.mood}`,mx+67,my+31,22,t.ink);}else{txt(c,'今日心情',mx,my+6,20,t.accent);drawSticker(c,getMoodSticker(d.mood),mx+28,my+52,61);txt(c,d.mood.slice(0,7),mx+65,my+57,19,t.ink);}}
 }
 function userStickers(c:Ctx,d:Diary,page:number,media:LoadedMedia[],W:number,H:number){
-  for(const s of d.stickers??[]){if(s.page!==page)continue;const x=s.x*W,y=s.y*H;if(s.kind.startsWith('asset:')){const image=media.find(m=>m.asset.id===s.kind.slice(6));if(image&&image.element instanceof HTMLImageElement){const e=image.element,scale=s.size/Math.max(e.naturalWidth,e.naturalHeight);c.save();c.translate(x,y);c.rotate(s.rotation);c.drawImage(e,-e.naturalWidth*scale/2,-e.naturalHeight*scale/2,e.naturalWidth*scale,e.naturalHeight*scale);c.restore();}}else drawSticker(c,s.kind,x,y,s.size,s.rotation);}
+  for(const s of d.stickers??[]){if(s.page!==page)continue;const pos=stickerPosition(s,d.ratio),x=pos.x*W,y=pos.y*H;if(s.kind.startsWith('asset:')){const image=media.find(m=>m.asset.id===s.kind.slice(6));if(image&&image.element instanceof HTMLImageElement){const e=image.element,scale=s.size/Math.max(e.naturalWidth,e.naturalHeight);c.save();c.translate(x,y);c.rotate(s.rotation);c.drawImage(e,-e.naturalWidth*scale/2,-e.naturalHeight*scale/2,e.naturalWidth*scale,e.naturalHeight*scale);c.restore();}}else drawSticker(c,s.kind,x,y,s.size,s.rotation);}
 }
-export function render(canvas:HTMLCanvasElement,d:Diary,pages:TextLine[][],page:number,media:LoadedMedia[],time=999,animate=false){
-  const c=canvas.getContext('2d')!,[W,H]=dimensions(d),t=themes.find(t=>t.id===d.theme)??themes[0],g=geometry(d);c.save();c.scale(canvas.width/W,canvas.height/H);c.clearRect(0,0,W,H);book(c,d,t);decorations(c,d,t,g);mediaRects(d).forEach((r,i)=>photo(c,mediaForSlot(d,page,i,media),r,d,t,i));writing(c,d,t,g,pages[page]??[],time,animate);
-  if(d.ratio==='landscape'&&d.decoration){const b=g.media;if(d.theme==='cream'){txt(c,'收集一点小美好',b.x+68,b.y+b.h+65,24,t.accent);star(c,1469,694,15,'#d2b676');}if(d.theme==='blue'){txt(c,'一小片晴天，也值得纪念。',923,124,22,t.accent);stem(c,1510,785,.8,'#91a284',true);}}
+export function render(canvas:HTMLCanvasElement,d:Diary,pages:TextLine[][],page:number,media:LoadedMedia[],time=999,animate=false,editingField?:EditingField){
+  const c=canvas.getContext('2d')!,[W,H]=dimensions(d),t=themes.find(t=>t.id===d.theme)??themes[0],g=geometry(d);c.save();c.scale(canvas.width/W,canvas.height/H);c.clearRect(0,0,W,H);book(c,d,t);decorations(c,d,t,g);mediaRects(d).forEach((r,i)=>photo(c,mediaForSlot(d,page,i,media),r,d,t,i));writing(c,d,t,g,pages[page]??[],time,animate,editingField);
   userStickers(c,d,page,media,W,H);c.textAlign='center';txt(c,`${String(page+1).padStart(2,'0')} / ${String(pages.length).padStart(2,'0')}`,W/2,H-58,16,t.accent,sans);c.textAlign='left';c.restore();
 }
